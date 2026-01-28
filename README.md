@@ -1,0 +1,2 @@
+# mkdocs-katex-ssr
+
