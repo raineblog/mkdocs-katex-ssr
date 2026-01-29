@@ -33,6 +33,12 @@ jobs:
           pip install -r requirements.txt
           pip install .
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 'latest'
+          cache: 'pnpm'
+      - run: pnpm ci
+
       - name: Build MkDocs
         run: mkdocs build
 
