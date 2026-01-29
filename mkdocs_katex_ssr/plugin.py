@@ -150,7 +150,7 @@ class KatexSsrPlugin(BasePlugin):
                 
                 result = json.loads(response_line.decode('utf-8'))
                 if result.get('status') == 'success':
-                    return '<div class="arithmatex">{html}</div>'.format(html=result.get('html'))
+                    return result.get('html')
                 else:
                     print(f"KaTeX error: {result.get('message')}")
             except Exception as e:
@@ -167,7 +167,7 @@ class KatexSsrPlugin(BasePlugin):
         soup = BeautifulSoup(output, 'html.parser')
         math_elements = soup.find_all(class_='arithmatex')
         for el in math_elements:
-            content = el.get_text().strip()
+            content = el.get_text(strip=True)
             display_mode = False
             
             if content.startswith('\\(') and content.endswith('\\)'):
@@ -183,10 +183,7 @@ class KatexSsrPlugin(BasePlugin):
             else:
                 latex = content
             
-            rendered_html = self._render_latex(latex, display_mode)
-            if rendered_html:
-                new_soup = BeautifulSoup(rendered_html, 'html.parser')
-                el.replace_with(new_soup)
+            el.string = self._render_latex(latex, display_mode)
 
         # Assets Injection
         css_file = self.config['katex_css_filename']
