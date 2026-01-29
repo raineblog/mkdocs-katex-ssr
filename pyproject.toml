@@ -11,7 +11,7 @@ authors = [
     {name = "RainPPR", email = "2125773894@qq.com"}
 ]
 license = "MIT"
-license-files = ["LICEN[CS]E*", "vendored/licenses/*.txt", "AUTHORS.md"]
+license-files = ["LICEN[CS]E*"]
 dependencies = [
     "mkdocs>=1.1.0",
     "beautifulsoup4>=4.9.0",
