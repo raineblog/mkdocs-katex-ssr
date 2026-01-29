@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mkdocs-katex-ssr"
+version = "0.1.0"
+description = "A MkDocs plugin for server-side rendering of KaTeX math."
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+license = {text = "MIT"}
+dependencies = [
+    "mkdocs>=1.1.0",
+    "beautifulsoup4>=4.9.0",
+]
+
+[project.entry-points."mkdocs.plugins"]
+katex-ssr = "mkdocs_katex_ssr.plugin:KatexSsrPlugin"
+
+[tool.setuptools]
+packages = ["mkdocs_katex_ssr"]
+
+[tool.setuptools.package-data]
+mkdocs_katex_ssr = ["renderer.js"]

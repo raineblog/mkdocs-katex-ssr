@@ -1,0 +1,27 @@
+site_name: MkDocs KaTeX SSR
+theme:
+  name: material
+
+nav:
+  - Home: index.md
+  - Installation: getting-started.md
+  - Configuration: configuration.md
+  - Troubleshooting: troubleshooting.md
+  - Demo: demo.md
+
+markdown_extensions:
+  - pymdownx.arithmatex:
+      generic: true
+
+plugins:
+  - search
+  - katex-ssr:
+      embed_assets: true
+      katex_css_filename: "katex-swap.min.css"
+      ssr_contribs:
+        - mhchem
+      client_scripts:
+        - copy-tex
+      katex_options:
+        macros:
+          "\\RR": "\\mathbb{R}"
