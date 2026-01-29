@@ -150,7 +150,7 @@ class KatexSsrPlugin(BasePlugin):
                 
                 result = json.loads(response_line.decode('utf-8'))
                 if result.get('status') == 'success':
-                    return result.get('html')
+                    return '<div class="arithmatex">{html}</div>'.format(html=result.get('html'))
                 else:
                     print(f"KaTeX error: {result.get('message')}")
             except Exception as e:
