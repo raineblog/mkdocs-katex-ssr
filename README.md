@@ -10,6 +10,7 @@ A MkDocs plugin that renders LaTeX math on the server side using [KaTeX](https:/
 ## Why Server-Side Rendering (SSR)?
 
 Traditional client-side rendering relies on JavaScript in the browser to convert LaTeX strings (e.g., `$\sqrt{a^2 + b^2}$`) into HTML. This can lead to:
+
 - **Layout Shift**: Content jumps as math loads.
 - **Slower Performance**: The browser must download and parse the KaTeX library before rendering.
 - **Dependency**: Requires client-side JavaScript execution.
@@ -26,10 +27,12 @@ Traditional client-side rendering relies on JavaScript in the browser to convert
 ## Installation
 
 ### Prerequisites
+
 - **Node.js**: Must be installed and available in your system PATH.
 - **Python**: 3.8+
 
 ### Install Plugin
+
 ```bash
 pip install mkdocs-katex-ssr
 ```
@@ -80,8 +83,9 @@ plugins:
 ```
 
 **What this does:**
-1.  **Copies Files**: It copies `katex.min.css` (or your chosen filename), the `fonts/` directory, and any specified `client_scripts` from your local `node_modules` to `site/assets/katex`.
-2.  **Relative Linking**: It updates all HTML citations to point to these local files using correct relative paths (e.g., `../assets/katex/katex.min.css`).
+
+1. **Copies Files**: It copies `katex.min.css` (or your chosen filename), the `fonts/` directory, and any specified `client_scripts` from your local `node_modules` to `site/assets/katex`.
+2. **Relative Linking**: It updates all HTML citations to point to these local files using correct relative paths (e.g., `../assets/katex/katex.min.css`).
 
 ## Advanced Configuration Options
 
