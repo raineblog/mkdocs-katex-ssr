@@ -183,7 +183,10 @@ class KatexSsrPlugin(BasePlugin):
             else:
                 latex = content
             
-            el.string = self._render_latex(latex, display_mode)
+            rendered_html = self._render_latex(latex, display_mode)
+            if rendered_html:
+                new_soup = BeautifulSoup(rendered_html, 'html.parser')
+                el.string = new_soup
 
         # Assets Injection
         css_file = self.config['katex_css_filename']
