@@ -25,7 +25,6 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.x'
-          cache: 'pip' # 开启缓存，加快后续构建速度
 
       - name: Install Dependencies
         run: |
@@ -33,11 +32,12 @@ jobs:
           pip install -r requirements.txt
           pip install .
 
-      - uses: pnpm/action-setup@v4
-        name: Install pnpm
+      - name: Install node
+        uses: actions/setup-node@v6
         with:
-          version: 10
-          run_install: true
+          node-version: 24
+        
+      - run: npm install katex
 
       - name: Build MkDocs
         run: mkdocs build
@@ -46,7 +46,7 @@ jobs:
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site # mkdocs 默认生成目录是 site
+          publish_dir: ./site
           user_name: "github-actions[bot]"
           user_email: "github-actions[bot]@users.noreply.github.com"
           full_commit_message: "Deploying to gh-pages from ${{ github.sha }}"

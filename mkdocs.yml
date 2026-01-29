@@ -1,6 +1,15 @@
 site_name: MkDocs KaTeX SSR
+site_url: https://raineblog.dpdns.org/mkdocs-katex-ssr/
+repo_url: https://github.com/raineblog/mkdocs-katex-ssr
+repo_name: raineblog/mkdocs-katex-ssr
+
 theme:
   name: material
+  language: en
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - content.action.view
 
 nav:
   - Home: index.md
@@ -20,8 +29,8 @@ plugins:
       katex_css_filename: "katex-swap.min.css"
       ssr_contribs:
         - mhchem
-      client_scripts:
-        - copy-tex
+      # client_scripts:
+      #   - copy-tex
       katex_options:
         macros:
           "\\RR": "\\mathbb{R}"

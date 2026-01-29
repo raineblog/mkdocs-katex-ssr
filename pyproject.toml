@@ -4,16 +4,24 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mkdocs-katex-ssr"
-version = "0.1.0"
+version = "1.0.1"
 description = "A MkDocs plugin for server-side rendering of KaTeX math."
+readme = "README.md"
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "RainPPR", email = "2125773894@qq.com"}
 ]
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICEN[CS]E*", "vendored/licenses/*.txt", "AUTHORS.md"]
 dependencies = [
     "mkdocs>=1.1.0",
     "beautifulsoup4>=4.9.0",
 ]
+
+[project.urls]
+Homepage = "https://raineblog.dpdns.org/mkdocs-katex-ssr/"
+Documentation = "https://raineblog.dpdns.org/mkdocs-katex-ssr/configuration/"
+Repository = "https://github.com/raineblog/mkdocs-katex-ssr"
+Issues = "https://github.com/raineblog/mkdocs-katex-ssr/issues"
 
 [project.entry-points."mkdocs.plugins"]
 katex-ssr = "mkdocs_katex_ssr.plugin:KatexSsrPlugin"
