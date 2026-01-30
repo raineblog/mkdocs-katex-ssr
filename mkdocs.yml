@@ -23,7 +23,6 @@ markdown_extensions:
       generic: true
 
 plugins:
-  - search
   - katex-ssr:
       embed_assets: true
       katex_css_filename: "katex-swap.min.css"
