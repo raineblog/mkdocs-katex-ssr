@@ -1,10 +1,11 @@
 import os
 import json
+import sqlite3
+import hashlib
 import subprocess
 import threading
 import warnings
 import logging
-import requests
 import shutil
 from mkdocs.plugins import BasePlugin
 from mkdocs.config import config_options
@@ -48,6 +49,8 @@ class KatexSsrPlugin(BasePlugin):
         self.lock = threading.Lock()
         self._asset_cache = {}
         self._local_dist_path = None
+        self.db_conn = None
+        self.db_path = None
 
     def _ensure_trailing_slash(self, path):
         if not path.endswith('/') and not path.endswith('\\'):
@@ -65,6 +68,21 @@ class KatexSsrPlugin(BasePlugin):
         self.config['katex_dist'] = self._ensure_trailing_slash(self.config['katex_dist'])
         
         project_dir = os.path.dirname(config['config_file_path'])
+        
+        # Initialize Cache DB
+        try:
+            cache_dir = os.path.join(project_dir, '.cache', 'plugin', 'katex-ssr')
+            os.makedirs(cache_dir, exist_ok=True)
+            self.db_path = os.path.join(cache_dir, 'cache.db')
+            self.db_conn = sqlite3.connect(
+                self.db_path, 
+                check_same_thread=False
+            )
+            with self.db_conn:
+                self.db_conn.execute('CREATE TABLE IF NOT EXISTS katex_cache (hash TEXT PRIMARY KEY, html TEXT)')
+        except Exception as e:
+            print(f"Warning: Failed to initialize KaTeX SSR cache: {e}")
+            self.db_conn = None
         
         # Merge legacy contrib_scripts into ssr_contribs if used
         if self.config['contrib_scripts']:
@@ -129,6 +147,22 @@ class KatexSsrPlugin(BasePlugin):
         return config
 
     def _render_latex(self, latex, display_mode=False):
+        # Check cache first
+        latex_trimmed = latex.strip()
+        cache_key = None
+        if self.db_conn:
+            try:
+                # Create a unique hash for the content AND display mode
+                content_to_hash = f"{latex_trimmed}::{display_mode}"
+                cache_key = hashlib.sha256(content_to_hash.encode('utf-8')).hexdigest()
+                
+                cursor = self.db_conn.execute("SELECT html FROM katex_cache WHERE hash=?", (cache_key,))
+                row = cursor.fetchone()
+                if row:
+                    return row[0]
+            except Exception as e:
+                print(f"Error reading cache: {e}")
+
         if not self.process:
             return None
         
@@ -150,7 +184,18 @@ class KatexSsrPlugin(BasePlugin):
                 
                 result = json.loads(response_line.decode('utf-8'))
                 if result.get('status') == 'success':
-                    return result.get('html')
+                    html = result.get('html')
+                    # Save to cache
+                    if self.db_conn and cache_key:
+                        try:
+                            with self.db_conn:
+                                self.db_conn.execute(
+                                    "INSERT OR REPLACE INTO katex_cache (hash, html) VALUES (?, ?)",
+                                    (cache_key, html)
+                                )
+                        except Exception as e:
+                            print(f"Error saving to cache: {e}")
+                    return html
                 else:
                     print(f"KaTeX error: {result.get('message')}")
             except Exception as e:
@@ -233,6 +278,13 @@ class KatexSsrPlugin(BasePlugin):
         if self.process:
             self.process.terminate()
             self.process.wait()
+        
+        if self.db_conn:
+            try:
+                self.db_conn.close()
+            except:
+                pass
+            self.db_conn = None
         
         # Copy assets if requested
         if self.config['embed_assets'] and self._local_dist_path:
