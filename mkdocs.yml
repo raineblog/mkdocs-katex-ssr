@@ -24,12 +24,13 @@ markdown_extensions:
 
 plugins:
   - katex-ssr:
+      verbose: true
       embed_assets: true
       katex_css_filename: "katex-swap.min.css"
       ssr_contribs:
         - mhchem
-      # client_scripts:
-      #   - copy-tex
+      client_scripts:
+        - copy-tex
       katex_options:
         macros:
           "\\RR": "\\mathbb{R}"

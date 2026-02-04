@@ -7,6 +7,7 @@ import threading
 import warnings
 import logging
 import shutil
+import time
 from mkdocs.plugins import BasePlugin
 from mkdocs.config import config_options
 from mkdocs.utils import get_relative_url
@@ -30,8 +31,11 @@ for logger_name in ["mkdocs", "mkdocs.plugins", "py.warnings", ""]:
 
 logging.captureWarnings(True)
 
+log = logging.getLogger('mkdocs.plugins.katex-ssr')
+
 class KatexSsrPlugin(BasePlugin):
     config_scheme = (
+        ('verbose', config_options.Type(bool, default=False)),
         ('katex_dist', config_options.Type(str, default='https://cdn.jsdelivr.net/npm/katex@latest/dist/')),
         ('katex_css_filename', config_options.Type(str, default='katex.min.css')),
         ('add_katex_css', config_options.Type(bool, default=True)),
@@ -159,12 +163,12 @@ class KatexSsrPlugin(BasePlugin):
                 cursor = self.db_conn.execute("SELECT html FROM katex_cache WHERE hash=?", (cache_key,))
                 row = cursor.fetchone()
                 if row:
-                    return row[0]
+                    return row[0], True
             except Exception as e:
                 print(f"Error reading cache: {e}")
 
         if not self.process:
-            return None
+            return None, False
         
         with self.lock:
             payload = {
@@ -180,7 +184,7 @@ class KatexSsrPlugin(BasePlugin):
                 
                 response_line = self.process.stdout.readline()
                 if not response_line:
-                    return None
+                    return None, False
                 
                 result = json.loads(response_line.decode('utf-8'))
                 if result.get('status') == 'success':
@@ -195,7 +199,7 @@ class KatexSsrPlugin(BasePlugin):
                                 )
                         except Exception as e:
                             print(f"Error saving to cache: {e}")
-                    return html
+                    return html, False
                 else:
                     print(f"KaTeX error: {result.get('message')}")
             except Exception as e:
@@ -203,11 +207,15 @@ class KatexSsrPlugin(BasePlugin):
                     stderr_content = self.process.stderr.read()
                     if stderr_content:
                         print(f"Renderer died with: {stderr_content.decode('utf-8', errors='replace')}")
-            return None
+            return None, False
 
     def on_post_page(self, output, page, config):
         if not self.process:
             return output
+
+        start_time = time.time()
+        formula_count = 0
+        cache_count = 0
 
         soup = BeautifulSoup(output, 'html.parser')
         math_elements = soup.find_all(class_='arithmatex')
@@ -228,11 +236,20 @@ class KatexSsrPlugin(BasePlugin):
             else:
                 latex = content
             
-            rendered_html = self._render_latex(latex, display_mode)
-            new_soup = BeautifulSoup(rendered_html, 'html.parser')
+            rendered_html, from_cache = self._render_latex(latex, display_mode)
+            
+            if rendered_html:
+                formula_count += 1
+                if from_cache:
+                    cache_count += 1
+                
+                new_soup = BeautifulSoup(rendered_html, 'html.parser')
+                el.clear()
+                el.append(new_soup)
 
-            el.clear()
-            el.append(new_soup)
+        if self.config['verbose']:
+            duration = (time.time() - start_time) * 1000
+            log.info(f"Katex-SSR processed {page.file.src_path} in {duration:.2f}ms: {formula_count} formulas ({cache_count} cached)")
 
         # Assets Injection
         css_file = self.config['katex_css_filename']

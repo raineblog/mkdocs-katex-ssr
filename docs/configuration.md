@@ -16,6 +16,7 @@ plugins:
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
+| `verbose` | bool | `false` | If true, logs the number of formulas, cache hits, and time spent processing each page. |
 | `katex_dist` | str | jsDelivr | Base URL for CDN, or local file path to KaTeX distribution. Default: `https://cdn.jsdelivr.net/npm/katex@latest/dist/` |
 | `add_katex_css` | bool | `true` | Whether to automatically inject the CSS link tag into the page head. |
 | `katex_css_filename` | str | `katex.min.css` | The filename of the CSS file to load. Setting this to `katex-swap.min.css` is recommended for better font loading performance (`font-display: swap`). |

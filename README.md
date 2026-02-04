@@ -22,6 +22,7 @@ Traditional client-side rendering relies on JavaScript in the browser to convert
 - **High Performance**: Uses a persistent Node.js process to render equations efficiently without spawning a new process for every item.
 - **Offline Support**: Optional "Offline Mode" copies all necessary CSS, fonts, and scripts to your site directory, removing external CDN dependencies.
 - **Smart Asset Management**: Separate configuration for server-side processing scripts (like `mhchem`) and client-side interactive scripts (like `copy-tex`).
+- **Performance Monitoring**: Detailed build-time logging for each page tracking formula counts, cache hits, and processing speeds.
 - **Clean Output**: Aggressive warning suppression for a quieter build log.
 
 ## Installation
@@ -49,6 +50,7 @@ markdown_extensions:
 plugins:
   - katex-ssr:
       # --- Basic Configuration ---
+      verbose: true # Enable build logs for each page
       katex_dist: "https://cdn.jsdelivr.net/npm/katex@latest/dist/"
       add_katex_css: true
       katex_css_filename: "katex-swap.min.css" # Use swap version for better font-display behavior
@@ -91,6 +93,7 @@ plugins:
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
+| `verbose` | bool | `false` | If true, logs the number of formulas, cache hits, and time spent processing each page. |
 | `katex_dist` | str | jsDelivr | Base URL for CDN, or local file path to KaTeX distribution. |
 | `add_katex_css` | bool | `true` | Whether to inject the CSS link tag. |
 | `katex_css_filename` | str | `katex.min.css` | The specific CSS file to load. `katex-swap.min.css` is recommended. |
