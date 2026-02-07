@@ -1,6 +1,6 @@
 # Math Rendering Demo
 
-This page demonstrates the server-side rendering capabilities of the plugin.
+This page demonstrates the rendering capabilities of the plugin. Note that these formulas work whether you use Server-Side Rendering (SSR) or the `disable: true` client-side mode.
 
 ## Inline Math
 

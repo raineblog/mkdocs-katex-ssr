@@ -30,8 +30,23 @@ The plugin requires `node` to be in your system's PATH.
 - Open a terminal and run `node --version` to verify it is installed and accessible.
 - If running in a CI/CD environment, ensure a "Setup Node" step is included before the MkDocs build.
 
-## Build Warnings
-
-This plugin includes aggressive warning suppression to silence deprecation warnings often emitted by `pkg_resources` and valid but noisy logs from libraries like `jieba`.
-
 If you still see warnings, please verify you are using the latest version of the plugin.
+
+## Configuration Validation Error
+
+**Error:**
+
+```text
+Config value 'katex-ssr': When 'disable' is true, 'add_katex_css' must also be true...
+```
+
+**Solution:**
+
+When you set `disable: true` to use client-side rendering, the plugin must be allowed to inject the KaTeX CSS. Ensure `add_katex_css` is not set to `false`.
+
+```yaml
+plugins:
+  - katex-ssr:
+      disable: true
+      add_katex_css: true # This must be true
+```

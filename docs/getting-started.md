@@ -18,5 +18,17 @@ Alternatively, if you are installing from source:
 ```bash
 git clone https://github.com/raineblog/mkdocs-katex-ssr.git
 cd mkdocs-katex-ssr
+```bash
 pip install .
 ```
+
+## Basic Configuration
+
+Enable the plugin in your `mkdocs.yml`:
+
+```yaml
+plugins:
+  - katex-ssr
+```
+
+For more advanced options, including how to **disable SSR** for client-side only rendering, see the [Configuration](configuration.md) page.

@@ -19,8 +19,7 @@ Traditional client-side rendering relies on JavaScript in the browser to convert
 
 ## Features
 
-- **High Performance**: Uses a persistent Node.js process to render equations efficiently without spawning a new process for every item.
-- **Offline Support**: Optional "Offline Mode" copies all necessary CSS, fonts, and scripts to your site directory, removing external CDN dependencies.
-- **Smart Asset Management**: Separate configuration for server-side processing scripts (like `mhchem`) and client-side interactive scripts (like `copy-tex`).
+- **Flexible Rendering**: Supports both high-performance Server-Side Rendering (SSR) and traditional client-side rendering (via the `disable` option).
 - **Performance Monitoring**: Detailed build-time logging for each page tracking formula counts, cache hits, and processing speeds.
+- **Built-in Cache**: Includes a SQLite-based cache to speed up recompilation of equations.
 - **Clean Output**: Aggressive warning suppression for a quieter build log.

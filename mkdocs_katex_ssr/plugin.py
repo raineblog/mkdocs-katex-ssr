@@ -421,7 +421,8 @@ class KatexSsrPlugin(BasePlugin):
             # we don't copy it. If user wants it on client, they MUST put it in client_scripts.
             for script_name in self.config['client_scripts']:
                  if '://' not in script_name and not script_name.endswith('.js'):
-                      if os.path.exists(src_script):
+                     src_script = os.path.join(self._local_dist_path, 'contrib', f'{script_name}.min.js')
+                     if os.path.exists(src_script):
                          shutil.copy2(src_script, dest_contrib)
 
             if self.config['disable']:
