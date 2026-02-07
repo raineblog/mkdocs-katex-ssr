@@ -21,6 +21,7 @@ plugins:
 | `add_katex_css` | bool | `true` | Whether to automatically inject the CSS link tag into the page head. |
 | `katex_css_filename` | str | `katex.min.css` | The filename of the CSS file to load. Setting this to `katex-swap.min.css` is recommended for better font loading performance (`font-display: swap`). |
 | `katex_options` | dict | `{}` | Standard options passed directly to `katex.renderToString`. Use this to define macros (e.g., `\RR`), set limits, etc. |
+| `disable` | bool | `false` | If true, skips Server-Side Rendering (SSR) and instead injects KaTeX with its "Auto-render" extension for client-side rendering. |
 
 ## Script Loading (Hybrid Mode)
 
@@ -69,3 +70,27 @@ plugins:
 1. **Copies Assets**: The plugin locates `katex.min.css` (or your configured filename), the `fonts/` folder, and any scripts listed in `client_scripts` from your local `node_modules` directory.
 2. **Destinations**: Files are copied to `site/assets/katex/` (configurable via `copy_assets_to`).
 3. **Linking**: HTML files are updated to point to these local assets using relative paths (e.g., `../assets/katex/katex.min.css`), ensuring they work even if you open the HTML file directly from your disk.
+
+## Client-Side Only Mode (Disable SSR)
+
+If you prefer to use KaTeX's traditional "Auto-render" extension instead of Server-Side Rendering (SSR), set `disable: true`.
+
+```yaml
+plugins:
+  - katex-ssr:
+      disable: true
+      add_katex_css: true # Required when disable is true
+      katex_options:
+        macros:
+          "\RR": "\\mathbb{R}"
+```
+
+> [!IMPORTANT]
+> When `disable: true`, the plugin will:
+> 1. Skip SSR processing during build (faster build time).
+> 2. Inject `katex.min.js` and `auto-render.min.js`.
+> 3. Inject an initialization script to render math as soon as the page loads.
+> 4. Automatically pass `macros` from `katex_options` to the auto-render call.
+> 5. Still respect `ssr_contribs` and `client_scripts` (injecting them into the page).
+>
+> **Note**: `add_katex_css` must be set to `true` (default) when `disable` is `true`.

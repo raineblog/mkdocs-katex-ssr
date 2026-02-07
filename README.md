@@ -19,11 +19,11 @@ Traditional client-side rendering relies on JavaScript in the browser to convert
 
 ## Features
 
-- **High Performance**: Uses a persistent Node.js process to render equations efficiently without spawning a new process for every item.
-- **Offline Support**: Optional "Offline Mode" copies all necessary CSS, fonts, and scripts to your site directory, removing external CDN dependencies.
-- **Smart Asset Management**: Separate configuration for server-side processing scripts (like `mhchem`) and client-side interactive scripts (like `copy-tex`).
-- **Performance Monitoring**: Detailed build-time logging for each page tracking formula counts, cache hits, and processing speeds.
-- **Clean Output**: Aggressive warning suppression for a quieter build log.
+- **High Performance**: Uses a persistent Node.js process to render equations efficiently.
+- **Offline Support**: Optional "Offline Mode" copies all necessary CSS, fonts, and scripts to your site directory.
+- **Hybrid Script Management**: Separate configuration for server-side processing (e.g., `mhchem`) and client-side interaction (e.g., `copy-tex`).
+- **Flexible Rendering**: New `disable` option to switch back to traditional client-side rendering while keeping asset management benefits.
+- **Built-in Cache**: Includes a SQLite-based cache to speed up recompilation.
 
 ## Installation
 
@@ -51,20 +51,16 @@ plugins:
   - katex-ssr:
       # --- Basic Configuration ---
       verbose: true # Enable build logs for each page
-      katex_dist: "https://cdn.jsdelivr.net/npm/katex@latest/dist/"
-      add_katex_css: true
-      katex_css_filename: "katex-swap.min.css" # Use swap version for better font-display behavior
+      disable: false # Set to true to switch to client-side rendering only
+      add_katex_css: true # Required (true by default)
+      katex_css_filename: "katex-swap.min.css"
       
       # --- Script Loading ---
-      # Scripts needed for rendering (Server-Side). e.g., chemical formulas.
-      # These are NOT sent to the browser.
       ssr_contribs:
-        - mhchem
+        - mhchem # Loaded in Node.js for SSR
         
-      # Scripts needed for interaction (Client-Side). e.g., clipboard copy.
-      # These ARE injected into the HTML.
       client_scripts:
-        - copy-tex
+        - copy-tex # Injected as <script> tag for the browser
       
       # --- KaTeX Options ---
       katex_options:
@@ -72,42 +68,47 @@ plugins:
           "\\RR": "\\mathbb{R}"
 ```
 
+### Client-Side Only Mode (`disable: true`)
+
+If you prefer to use KaTeX's traditional "Auto-render" extension instead of Server-Side Rendering (SSR), set `disable: true`.
+
+**Why use this?**
+- Faster builds (skips SSR logic).
+- Compatibility with certain client-side plugins that expect raw LaTeX in the DOM.
+- Shared configuration: Automatically passes `macros`, `ssr_contribs`, and `client_scripts` to the client-side renderer.
+
+> [!IMPORTANT]
+> When `disable: true`, `add_katex_css` **must** be `true`. If `add_katex_css` is set to `false`, the plugin will return a configuration error.
+
 ### Offline Mode (Self-Contained)
 
-If you need your documentation to work without an internet connection (or just want to host everything yourself), enable `embed_assets`.
+Enable `embed_assets` to host all KaTeX files locally within your site.
 
 ```yaml
 plugins:
   - katex-ssr:
       embed_assets: true
-      # You can specify a local path if auto-detection fails
-      # katex_dist: "./node_modules/katex/dist/"
 ```
 
-**What this does:**
-
-1. **Copies Files**: It copies `katex.min.css` (or your chosen filename), the `fonts/` directory, and any specified `client_scripts` from your local `node_modules` to `site/assets/katex`.
-2. **Relative Linking**: It updates all HTML citations to point to these local files using correct relative paths (e.g., `../assets/katex/katex.min.css`).
-
-## Advanced Configuration Options
+## Configuration Options
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `verbose` | bool | `false` | If true, logs the number of formulas, cache hits, and time spent processing each page. |
-| `katex_dist` | str | jsDelivr | Base URL for CDN, or local file path to KaTeX distribution. |
-| `add_katex_css` | bool | `true` | Whether to inject the CSS link tag. |
-| `katex_css_filename` | str | `katex.min.css` | The specific CSS file to load. `katex-swap.min.css` is recommended. |
-| `embed_assets` | bool | `false` | If true, copies assets to output dir and links locally. |
-| `ssr_contribs` | list | `[]` | List of KaTeX `contrib` libraries to load in the Node.js renderer (e.g., `mhchem`). |
-| `client_scripts` | list | `[]` | List of KaTeX `contrib` libraries to load in the browser (e.g., `copy-tex`). |
-| `copy_assets_to` | str | `assets/katex` | Destination directory for copied assets (relative to site_dir). |
-| `katex_options` | dict | `{}` | Standard options passed to `katex.renderToString` (macros, etc.). |
+| `disable` | bool | `false` | If true, skips SSR and uses client-side "Auto-render". |
+| `verbose` | bool | `false` | Logs formula counts and processing time per page. |
+| `katex_dist` | str | CDN URL | Base path for KaTeX (URL or local path). |
+| `add_katex_css` | bool | `true` | Whether to inject the CSS link tag. Must be true if `disable` is true. |
+| `katex_css_filename` | str | `katex.min.css`| The CSS filename to load. |
+| `embed_assets` | bool | `false` | Copies assets to output dir for offline support. |
+| `ssr_contribs` | list | `[]` | KaTeX contribs for SSR (or client if `disable: true`). |
+| `client_scripts` | list | `[]` | KaTeX contribs always injected for the browser. |
+| `katex_options` | dict | `{}` | Options passed to KaTeX (including `macros`). |
 
 ## Troubleshooting
 
-- **`katex` module not found**: Ensure `npm install katex` (or `pnpm`/`yarn`) has been run in your project root, or specific the path via `katex_dist`.
-- **Node.js error**: The plugin requires `node` to be in your PATH. On Windows, ensure you can run `node --version` in your terminal.
+- **Validation Error**: If you see "When 'disable' is true, 'add_katex_css' must also be true", ensure you haven't set `add_katex_css: false` while disabling SSR.
+- **Node.js issues**: Verify `node` is in your PATH.
 
 ## License
 
-This project is licensed under the MIT License.
+MIT License.

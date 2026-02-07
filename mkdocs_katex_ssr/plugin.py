@@ -46,6 +46,7 @@ class KatexSsrPlugin(BasePlugin):
         # Legacy/Alias for ssr_contribs to maintain some compat, though behavior changes
         ('contrib_scripts', config_options.Type(list, default=[])), 
         ('katex_options', config_options.Type(dict, default={})),
+        ('disable', config_options.Type(bool, default=False)),
     )
 
     def __init__(self):
@@ -69,6 +70,11 @@ class KatexSsrPlugin(BasePlugin):
             return os.path.normpath(os.path.join(base, path))
 
     def on_config(self, config):
+        if self.config['disable'] and not self.config['add_katex_css']:
+            raise config_options.ValidationError(
+                "When 'disable' is true, 'add_katex_css' must also be true to ensure KaTeX resources are available for client-side rendering."
+            )
+
         self.config['katex_dist'] = self._ensure_trailing_slash(self.config['katex_dist'])
         
         project_dir = os.path.dirname(config['config_file_path'])
@@ -104,6 +110,9 @@ class KatexSsrPlugin(BasePlugin):
              dist = os.path.join(node_modules, 'katex', 'dist')
              if os.path.isdir(dist):
                  self._local_dist_path = dist
+
+        if self.config['disable']:
+            return config
 
         # Start Node.js process
         renderer_path = os.path.join(os.path.dirname(__file__), 'renderer.js')
@@ -209,47 +218,54 @@ class KatexSsrPlugin(BasePlugin):
                         print(f"Renderer died with: {stderr_content.decode('utf-8', errors='replace')}")
             return None, False
 
-    def on_post_page(self, output, page, config):
-        if not self.process:
-            return output
-
-        start_time = time.time()
-        formula_count = 0
-        cache_count = 0
-
-        soup = BeautifulSoup(output, 'html.parser')
-        math_elements = soup.find_all(class_='arithmatex')
-        for el in math_elements:
-            content = el.get_text(strip=True)
-            display_mode = False
-            
-            if content.startswith('\\(') and content.endswith('\\)'):
-                latex = content[2:-2]
-            elif content.startswith('\\[') and content.endswith('\\]'):
-                latex = content[2:-2]
-                display_mode = True
-            elif content.startswith('$') and content.endswith('$'):
-                latex = content[1:-1]
-            elif content.startswith('$$') and content.endswith('$$'):
-                latex = content[2:-2]
-                display_mode = True
-            else:
-                latex = content
-            
-            rendered_html, from_cache = self._render_latex(latex, display_mode)
-            
-            if rendered_html:
-                formula_count += 1
-                if from_cache:
-                    cache_count += 1
-                
-                new_soup = BeautifulSoup(rendered_html, 'html.parser')
-                el.clear()
-                el.append(new_soup)
-
         if self.config['verbose']:
             duration = (time.time() - start_time) * 1000
             log.info(f"Katex-SSR processed {page.file.src_path} in {duration:.2f}ms: {formula_count} formulas ({cache_count} cached)")
+
+    def on_post_page(self, output, page, config):
+        if self.config['disable']:
+            soup = BeautifulSoup(output, 'html.parser')
+        else:
+            if not self.process:
+                return output
+
+            start_time = time.time()
+            formula_count = 0
+            cache_count = 0
+
+            soup = BeautifulSoup(output, 'html.parser')
+            math_elements = soup.find_all(class_='arithmatex')
+            for el in math_elements:
+                content = el.get_text(strip=True)
+                display_mode = False
+                
+                if content.startswith('\\(') and content.endswith('\\)'):
+                    latex = content[2:-2]
+                elif content.startswith('\\[') and content.endswith('\\]'):
+                    latex = content[2:-2]
+                    display_mode = True
+                elif content.startswith('$') and content.endswith('$'):
+                    latex = content[1:-1]
+                elif content.startswith('$$') and content.endswith('$$'):
+                    latex = content[2:-2]
+                    display_mode = True
+                else:
+                    latex = content
+                
+                rendered_html, from_cache = self._render_latex(latex, display_mode)
+                
+                if rendered_html:
+                    formula_count += 1
+                    if from_cache:
+                        cache_count += 1
+                    
+                    new_soup = BeautifulSoup(rendered_html, 'html.parser')
+                    el.clear()
+                    el.append(new_soup)
+
+            if self.config['verbose']:
+                duration = (time.time() - start_time) * 1000
+                log.info(f"Katex-SSR processed {page.file.src_path} in {duration:.2f}ms: {formula_count} formulas ({cache_count} cached)")
 
         # Assets Injection
         css_file = self.config['katex_css_filename']
@@ -288,6 +304,76 @@ class KatexSsrPlugin(BasePlugin):
                 soup.body.append(script_tag)
             else:
                 soup.append(script_tag)
+
+        # Inject Auto-render if disabled
+        if self.config['disable']:
+            # 1. Inject KaTeX JS
+            if self.config['embed_assets'] and self._local_dist_path:
+                dest_path = self.config['copy_assets_to']
+                js_url = get_relative_url(f"{dest_path}/katex.min.js", page.url)
+            else:
+                js_url = self._resolve_url(self.config['katex_dist'], "katex.min.js")
+            
+            katex_js = soup.new_tag('script', src=js_url)
+            if soup.body:
+                soup.body.append(katex_js)
+            else:
+                soup.append(katex_js)
+
+            # 2. Inject Auto-render JS
+            if self.config['embed_assets'] and self._local_dist_path:
+                dest_path = self.config['copy_assets_to']
+                auto_url = get_relative_url(f"{dest_path}/contrib/auto-render.min.js", page.url)
+            else:
+                auto_url = self._resolve_url(self.config['katex_dist'], "contrib/auto-render.min.js")
+            
+            auto_js = soup.new_tag('script', src=auto_url)
+            if soup.body:
+                soup.body.append(auto_js)
+            else:
+                soup.append(auto_js)
+
+            # 3. Inject ssr_contribs (they are needed on client if SSR is disabled)
+            for script_name in self.config['ssr_contribs']:
+                if '://' in script_name or script_name.endswith('.js'):
+                    script_url = script_name
+                else:
+                    if self.config['embed_assets'] and self._local_dist_path:
+                        dest_path = self.config['copy_assets_to']
+                        script_dest_file = f"{dest_path}/contrib/{script_name}.min.js"
+                        script_url = get_relative_url(script_dest_file, page.url)
+                    else:
+                        script_url = self._resolve_url(self.config['katex_dist'], f'contrib/{script_name}.min.js')
+                
+                script_tag = soup.new_tag('script', src=script_url)
+                if soup.body:
+                    soup.body.append(script_tag)
+                else:
+                    soup.append(script_tag)
+
+            # 4. Inject auto-render init code
+            macros = self.config['katex_options'].get('macros', {})
+            # Standard delimiters for arithmatex generic mode
+            auto_render_script = f"""
+            document.addEventListener("DOMContentLoaded", function() {{
+                renderMathInElement(document.body, {{
+                    delimiters: [
+                        {{left: "$$", right: "$$", display: true}},
+                        {{left: "$", right: "$", display: false}},
+                        {{left: "\\\\(", right: "\\\\)", display: false}},
+                        {{left: "\\\\[", right: "\\\\]", display: true}}
+                    ],
+                    macros: {json.dumps(macros)},
+                    ...{json.dumps(self.config['katex_options'])}
+                }});
+            }});
+            """
+            init_tag = soup.new_tag('script')
+            init_tag.string = auto_render_script
+            if soup.body:
+                soup.body.append(init_tag)
+            else:
+                soup.append(init_tag)
 
         return str(soup)
 
@@ -335,8 +421,23 @@ class KatexSsrPlugin(BasePlugin):
             # we don't copy it. If user wants it on client, they MUST put it in client_scripts.
             for script_name in self.config['client_scripts']:
                  if '://' not in script_name and not script_name.endswith('.js'):
-                     src_script = os.path.join(self._local_dist_path, 'contrib', f'{script_name}.min.js')
-                     if os.path.exists(src_script):
+                      if os.path.exists(src_script):
                          shutil.copy2(src_script, dest_contrib)
 
-
+            if self.config['disable']:
+                # Copy katex.min.js
+                src_js = os.path.join(self._local_dist_path, "katex.min.js")
+                if os.path.exists(src_js):
+                    shutil.copy2(src_js, dest_dir)
+                
+                # Copy auto-render.min.js
+                src_auto = os.path.join(self._local_dist_path, "contrib", "auto-render.min.js")
+                if os.path.exists(src_auto):
+                    shutil.copy2(src_auto, dest_contrib)
+                
+                # Copy ssr_contribs as well
+                for script_name in self.config['ssr_contribs']:
+                    if '://' not in script_name and not script_name.endswith('.js'):
+                        src_script = os.path.join(self._local_dist_path, 'contrib', f'{script_name}.min.js')
+                        if os.path.exists(src_script):
+                            shutil.copy2(src_script, dest_contrib)
