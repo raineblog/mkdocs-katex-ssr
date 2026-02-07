@@ -191,6 +191,15 @@
     </span>
 </a>
 </li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#client-side-only-mode-disable-ssr">
+<span class="md-ellipsis">
+      
+        Client-Side Only Mode (Disable SSR)
+      
+    </span>
+</a>
+</li>
 </ul>
 </nav>
 </li>
@@ -281,6 +290,15 @@
     </span>
 </a>
 </li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#client-side-only-mode-disable-ssr">
+<span class="md-ellipsis">
+      
+        Client-Side Only Mode (Disable SSR)
+      
+    </span>
+</a>
+</li>
 </ul>
 </nav>
 </div>
@@ -342,6 +360,12 @@ plugins:
 <td style="text-align: left;"><code>{}</code></td>
 <td style="text-align: left;">Standard options passed directly to <code>katex.renderToString</code>. Use this to define macros (e.g., <code>\RR</code>), set limits, etc.</td>
 </tr>
+<tr>
+<td style="text-align: left;"><code>disable</code></td>
+<td style="text-align: left;">bool</td>
+<td style="text-align: left;"><code>false</code></td>
+<td style="text-align: left;">If true, skips Server-Side Rendering (SSR) and instead injects KaTeX with its "Auto-render" extension for client-side rendering.</td>
+</tr>
 </tbody>
 </table>
 <h2 id="script-loading-hybrid-mode">Script Loading (Hybrid Mode)</h2>
@@ -376,6 +400,26 @@ plugins:
 <li><strong>Destinations</strong>: Files are copied to <code>site/assets/katex/</code> (configurable via <code>copy_assets_to</code>).</li>
 <li><strong>Linking</strong>: HTML files are updated to point to these local assets using relative paths (e.g., <code>../assets/katex/katex.min.css</code>), ensuring they work even if you open the HTML file directly from your disk.</li>
 </ol>
+<h2 id="client-side-only-mode-disable-ssr">Client-Side Only Mode (Disable SSR)</h2>
+<p>If you prefer to use KaTeX's traditional "Auto-render" extension instead of Server-Side Rendering (SSR), set <code>disable: true</code>.</p>
+<pre><code class="language-yaml">plugins:
+  - katex-ssr:
+      disable: true
+      add_katex_css: true # Required when disable is true
+      katex_options:
+        macros:
+          "\RR": "\\mathbb{R}"
+</code></pre>
+<blockquote>
+<p>[!IMPORTANT]
+When <code>disable: true</code>, the plugin will:
+1. Skip SSR processing during build (faster build time).
+2. Inject <code>katex.min.js</code> and <code>auto-render.min.js</code>.
+3. Inject an initialization script to render math as soon as the page loads.
+4. Automatically pass <code>macros</code> from <code>katex_options</code> to the auto-render call.
+5. Still respect <code>ssr_contribs</code> and <code>client_scripts</code> (injecting them into the page).</p>
+<p><strong>Note</strong>: <code>add_katex_css</code> must be set to <code>true</code> (default) when <code>disable</code> is <code>true</code>.</p>
+</blockquote>
 </article>
 </div>
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>

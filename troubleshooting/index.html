@@ -173,10 +173,10 @@
 </a>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="#build-warnings">
+<a class="md-nav__link" href="#configuration-validation-error">
 <span class="md-ellipsis">
       
-        Build Warnings
+        Configuration Validation Error
       
     </span>
 </a>
@@ -229,10 +229,10 @@
 </a>
 </li>
 <li class="md-nav__item">
-<a class="md-nav__link" href="#build-warnings">
+<a class="md-nav__link" href="#configuration-validation-error">
 <span class="md-ellipsis">
       
-        Build Warnings
+        Configuration Validation Error
       
     </span>
 </a>
@@ -269,9 +269,18 @@ The plugin requires <code>node</code> to be in your system's PATH.</p>
 <li>Open a terminal and run <code>node --version</code> to verify it is installed and accessible.</li>
 <li>If running in a CI/CD environment, ensure a "Setup Node" step is included before the MkDocs build.</li>
 </ul>
-<h2 id="build-warnings">Build Warnings</h2>
-<p>This plugin includes aggressive warning suppression to silence deprecation warnings often emitted by <code>pkg_resources</code> and valid but noisy logs from libraries like <code>jieba</code>.</p>
 <p>If you still see warnings, please verify you are using the latest version of the plugin.</p>
+<h2 id="configuration-validation-error">Configuration Validation Error</h2>
+<p><strong>Error:</strong></p>
+<pre><code class="language-text">Config value 'katex-ssr': When 'disable' is true, 'add_katex_css' must also be true...
+</code></pre>
+<p><strong>Solution:</strong></p>
+<p>When you set <code>disable: true</code> to use client-side rendering, the plugin must be allowed to inject the KaTeX CSS. Ensure <code>add_katex_css</code> is not set to <code>false</code>.</p>
+<pre><code class="language-yaml">plugins:
+  - katex-ssr:
+      disable: true
+      add_katex_css: true # This must be true
+</code></pre>
 </article>
 </div>
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
