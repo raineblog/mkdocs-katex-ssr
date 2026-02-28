@@ -178,7 +178,7 @@ class KatexSsrPlugin(BasePlugin):
                 cwd=project_dir,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 shell=use_shell,
                 env=env
             )
