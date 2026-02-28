@@ -207,38 +207,46 @@ class KatexSsrPlugin(BasePlugin):
         if not self.process or not items:
             return {}
         
+        # 将公式分块处理，防止管道溢出和内存暴涨导致的死锁 (Pipe Deadlock)
+        # 建议块大小在 200-500 之间，这样 JSON 负载通常不会超过几百 KB
+        CHUNK_SIZE = 500
+        all_results = {}
+        
         with self.lock:
-            payload = {
-                'type': 'render_batch',
-                'items': items,
-                'options': self.config['katex_options']
-            }
-            try:
-                line = (json.dumps(payload) + '\n').encode('utf-8')
-                self.process.stdin.write(line)
-                self.process.stdin.flush()
-                
-                response_line = self.process.stdout.readline()
-                if not response_line:
-                    return {}
-                
-                result = json.loads(response_line.decode('utf-8'))
-                if result.get('status') == 'success':
-                    ret = {}
-                    for res in result.get('results', []):
-                        if res.get('status') == 'success':
-                            ret[res['id']] = res.get('html')
-                        else:
-                            log.warning(f"KaTeX error for item {res['id']}: {res.get('message')}")
-                    return ret
-                else:
-                    log.warning(f"KaTeX batch error: {result.get('message')}")
-            except Exception as e:
-                if self.process and self.process.poll() is not None:
-                    stderr_content = self.process.stderr.read()
-                    if stderr_content:
-                        log.error(f"Renderer died with: {stderr_content.decode('utf-8', errors='replace')}")
-            return {}
+            for i in range(0, len(items), CHUNK_SIZE):
+                chunk = items[i:i + CHUNK_SIZE]
+                payload = {
+                    'type': 'render_batch',
+                    'items': chunk,
+                    'options': self.config['katex_options']
+                }
+                try:
+                    line = (json.dumps(payload) + '\n').encode('utf-8')
+                    self.process.stdin.write(line)
+                    self.process.stdin.flush()
+                    
+                    response_line = self.process.stdout.readline()
+                    if not response_line:
+                        log.error("Katex-SSR: 渲染进程意外关闭。")
+                        break
+                    
+                    result = json.loads(response_line.decode('utf-8'))
+                    if result.get('status') == 'success':
+                        for res in result.get('results', []):
+                            if res.get('status') == 'success':
+                                all_results[res['id']] = res.get('html')
+                            else:
+                                log.warning(f"KaTeX error for item {res['id']}: {res.get('message')}")
+                    else:
+                        log.warning(f"KaTeX batch error: {result.get('message')}")
+                except Exception as e:
+                    if self.process and self.process.poll() is not None:
+                        stderr_content = self.process.stderr.read()
+                        if stderr_content:
+                            log.error(f"Renderer died with: {stderr_content.decode('utf-8', errors='replace')}")
+                    log.error(f"Katex-SSR IPC Error: {e}")
+                    break
+        return all_results
 
         if self.config['verbose']:
             duration = (time.time() - start_time) * 1000
@@ -456,8 +464,22 @@ class KatexSsrPlugin(BasePlugin):
             log.info(f"Katex-SSR: 构建完毕。共处理 {self.total_formulas} 个数学公式 ({self.total_cached} 个来自缓存)，总耗时 {self.total_time:.2f} 秒。")
 
         if self.process:
-            self.process.terminate()
-            self.process.wait()
+            try:
+                # 显式关闭标准输入，发送 EOF 信号给 Node/Bun 进程
+                if self.process.stdin:
+                    self.process.stdin.close()
+            except:
+                pass
+            
+            try:
+                # 给予 5 秒缓冲时间让其自行收尾退出
+                self.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                log.warning("Katex-SSR: 渲染进程退出超时，正在强制结束...")
+                # 如果是 Windows 且使用了 Shell，这里可能会留下残留进程
+                # 但由于我们现在是直接运行或者已经通过 stdin.close() 处理，通常能解决
+                self.process.kill()
+                self.process.wait()
         
         if self.db_conn:
             try:

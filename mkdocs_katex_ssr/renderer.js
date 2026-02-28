@@ -45,6 +45,7 @@ rl.on('line', (line) => {
             const html = katex.renderToString(latex, {
                 displayMode: displayMode || false,
                 throwOnError: false,
+                strict: false,
                 ...options
             });
             
@@ -56,6 +57,7 @@ rl.on('line', (line) => {
                     const html = katex.renderToString(item.latex, {
                         displayMode: item.displayMode || false,
                         throwOnError: false,
+                        strict: false,
                         ...options
                     });
                     return { id: item.id, status: 'success', html: html };
@@ -68,6 +70,10 @@ rl.on('line', (line) => {
     } catch (err) {
         process.stdout.write(JSON.stringify({ status: 'error', message: err.message }) + '\n');
     }
+});
+
+rl.on('close', () => {
+    process.exit(0);
 });
 
 console.error('KaTeX SSR Renderer started');
