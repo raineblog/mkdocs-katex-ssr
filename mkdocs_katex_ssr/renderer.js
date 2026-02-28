@@ -49,6 +49,21 @@ rl.on('line', (line) => {
             });
             
             process.stdout.write(JSON.stringify({ status: 'success', html }) + '\n');
+        } else if (data.type === 'render_batch') {
+            const { items, options } = data;
+            const results = items.map(item => {
+                try {
+                    const html = katex.renderToString(item.latex, {
+                        displayMode: item.displayMode || false,
+                        throwOnError: false,
+                        ...options
+                    });
+                    return { id: item.id, status: 'success', html: html };
+                } catch (err) {
+                    return { id: item.id, status: 'error', message: err.message };
+                }
+            });
+            process.stdout.write(JSON.stringify({ status: 'success', results: results }) + '\n');
         }
     } catch (err) {
         process.stdout.write(JSON.stringify({ status: 'error', message: err.message }) + '\n');

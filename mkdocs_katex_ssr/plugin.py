@@ -47,6 +47,7 @@ class KatexSsrPlugin(BasePlugin):
         ('contrib_scripts', config_options.Type(list, default=[])), 
         ('katex_options', config_options.Type(dict, default={})),
         ('disable', config_options.Type(bool, default=False)),
+        ('use_bun', config_options.Choice(('auto', True, False), default='auto')),
     )
 
     def __init__(self):
@@ -56,6 +57,9 @@ class KatexSsrPlugin(BasePlugin):
         self._local_dist_path = None
         self.db_conn = None
         self.db_path = None
+        self.total_formulas = 0
+        self.total_cached = 0
+        self.total_time = 0
 
     def _ensure_trailing_slash(self, path):
         if not path.endswith('/') and not path.endswith('\\'):
@@ -101,6 +105,34 @@ class KatexSsrPlugin(BasePlugin):
                 if script not in self.config['ssr_contribs']:
                     self.config['ssr_contribs'].append(script)
 
+        # Detect runtime environment (Node vs Bun)
+        self.runtime = 'node'
+        self.pm = 'npm'
+        use_bun_cfg = self.config['use_bun']
+        
+        has_bun = shutil.which('bun') is not None
+        has_node = shutil.which('node') is not None
+        
+        if use_bun_cfg is True:
+            if not has_bun:
+                raise config_options.ValidationError("配置指定了 use_bun=True，但在系统中未找到 bun。")
+            self.runtime = 'bun'
+            self.pm = 'bun'
+        elif use_bun_cfg is False:
+            if not has_node:
+                raise config_options.ValidationError("配置指定了 use_bun=False，但在系统中未找到 node。")
+            self.runtime = 'node'
+            self.pm = 'npm'
+        else:
+            if has_bun:
+                self.runtime = 'bun'
+                self.pm = 'bun'
+            elif has_node:
+                self.runtime = 'node'
+                self.pm = 'npm'
+            elif not self.config['disable']:
+                raise config_options.ValidationError("系统中未找到 node 或 bun，无法启动 KaTeX SSR。请安装 node 或 bun，或者将 disable 设为 true。")
+
         # Asset resolution logic
         possible_dist = self._resolve_url(project_dir, self.config['katex_dist'])
         if os.path.isdir(possible_dist):
@@ -111,16 +143,27 @@ class KatexSsrPlugin(BasePlugin):
              if os.path.isdir(dist):
                  self._local_dist_path = dist
 
+        katex_dir = os.path.join(project_dir, 'node_modules', 'katex')
+        if not self.config['disable'] and not os.path.isdir(katex_dir):
+            log.info(f"Katex-SSR: 未检测到 katex 依赖，正在使用 {self.pm} 自动安装...")
+            install_cmd = [self.pm, 'add', 'katex'] if self.pm == 'bun' else [self.pm, 'install', 'katex']
+            try:
+                subprocess.run(install_cmd, cwd=project_dir, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                log.info("Katex-SSR: katex 安装成功。")
+                self._local_dist_path = os.path.join(katex_dir, 'dist')
+            except Exception as e:
+                log.error(f"Katex-SSR: katex 安装失败: {e}")
+
         if self.config['disable']:
             return config
 
-        # Start Node.js process
+        # Start renderer process
         renderer_path = os.path.join(os.path.dirname(__file__), 'renderer.js')
         
         use_shell = os.name == 'nt'
-        cmd = ['node', renderer_path]
+        cmd = [self.runtime, renderer_path]
         if use_shell:
-             cmd = f'node "{renderer_path}"'
+             cmd = f'{self.runtime} "{renderer_path}"'
         
         try:
             env = os.environ.copy()
@@ -139,6 +182,7 @@ class KatexSsrPlugin(BasePlugin):
                 shell=use_shell,
                 env=env
             )
+            log.info(f"Katex-SSR: 成功使用 {self.runtime} 启动后端渲染进程。")
             
             # Send ONLY ssr_contribs to Node
             node_contribs = [c for c in self.config['ssr_contribs'] if '://' not in c]
@@ -159,31 +203,14 @@ class KatexSsrPlugin(BasePlugin):
         
         return config
 
-    def _render_latex(self, latex, display_mode=False):
-        # Check cache first
-        latex_trimmed = latex.strip()
-        cache_key = None
-        if self.db_conn:
-            try:
-                # Create a unique hash for the content AND display mode
-                content_to_hash = f"{latex_trimmed}::{display_mode}"
-                cache_key = hashlib.sha256(content_to_hash.encode('utf-8')).hexdigest()
-                
-                cursor = self.db_conn.execute("SELECT html FROM katex_cache WHERE hash=?", (cache_key,))
-                row = cursor.fetchone()
-                if row:
-                    return row[0], True
-            except Exception as e:
-                print(f"Error reading cache: {e}")
-
-        if not self.process:
-            return None, False
+    def _render_latex_batch(self, items):
+        if not self.process or not items:
+            return {}
         
         with self.lock:
             payload = {
-                'type': 'render',
-                'latex': latex,
-                'displayMode': display_mode,
+                'type': 'render_batch',
+                'items': items,
                 'options': self.config['katex_options']
             }
             try:
@@ -193,30 +220,25 @@ class KatexSsrPlugin(BasePlugin):
                 
                 response_line = self.process.stdout.readline()
                 if not response_line:
-                    return None, False
+                    return {}
                 
                 result = json.loads(response_line.decode('utf-8'))
                 if result.get('status') == 'success':
-                    html = result.get('html')
-                    # Save to cache
-                    if self.db_conn and cache_key:
-                        try:
-                            with self.db_conn:
-                                self.db_conn.execute(
-                                    "INSERT OR REPLACE INTO katex_cache (hash, html) VALUES (?, ?)",
-                                    (cache_key, html)
-                                )
-                        except Exception as e:
-                            print(f"Error saving to cache: {e}")
-                    return html, False
+                    ret = {}
+                    for res in result.get('results', []):
+                        if res.get('status') == 'success':
+                            ret[res['id']] = res.get('html')
+                        else:
+                            log.warning(f"KaTeX error for item {res['id']}: {res.get('message')}")
+                    return ret
                 else:
-                    print(f"KaTeX error: {result.get('message')}")
+                    log.warning(f"KaTeX batch error: {result.get('message')}")
             except Exception as e:
                 if self.process and self.process.poll() is not None:
                     stderr_content = self.process.stderr.read()
                     if stderr_content:
-                        print(f"Renderer died with: {stderr_content.decode('utf-8', errors='replace')}")
-            return None, False
+                        log.error(f"Renderer died with: {stderr_content.decode('utf-8', errors='replace')}")
+            return {}
 
         if self.config['verbose']:
             duration = (time.time() - start_time) * 1000
@@ -235,7 +257,11 @@ class KatexSsrPlugin(BasePlugin):
 
             soup = BeautifulSoup(output, 'html.parser')
             math_elements = soup.find_all(class_='arithmatex')
-            for el in math_elements:
+            
+            batch_items = []
+            cached_results = {}
+            
+            for i, el in enumerate(math_elements):
                 content = el.get_text(strip=True)
                 display_mode = False
                 
@@ -252,20 +278,68 @@ class KatexSsrPlugin(BasePlugin):
                 else:
                     latex = content
                 
-                rendered_html, from_cache = self._render_latex(latex, display_mode)
+                latex_trimmed = latex.strip()
+                cache_key = None
+                from_cache = False
                 
-                if rendered_html:
+                if self.db_conn:
+                    try:
+                        content_to_hash = f"{latex_trimmed}::{display_mode}"
+                        cache_key = hashlib.sha256(content_to_hash.encode('utf-8')).hexdigest()
+                        cursor = self.db_conn.execute("SELECT html FROM katex_cache WHERE hash=?", (cache_key,))
+                        row = cursor.fetchone()
+                        if row:
+                            cached_results[i] = row[0]
+                            from_cache = True
+                            formula_count += 1
+                            cache_count += 1
+                    except Exception as e:
+                        pass
+                
+                if not from_cache:
+                    batch_items.append({
+                        'id': i,
+                        'latex': latex,
+                        'displayMode': display_mode,
+                        'cache_key': cache_key
+                    })
+
+            batch_results = self._render_latex_batch(batch_items)
+            
+            if self.db_conn and batch_results:
+                try:
+                    with self.db_conn:
+                        for item in batch_items:
+                            i = item['id']
+                            if i in batch_results and item['cache_key']:
+                                self.db_conn.execute(
+                                    "INSERT OR REPLACE INTO katex_cache (hash, html) VALUES (?, ?)",
+                                    (item['cache_key'], batch_results[i])
+                                )
+                except Exception as e:
+                    log.warning(f"Error saving to cache: {e}")
+            
+            for i, el in enumerate(math_elements):
+                html = None
+                if i in cached_results:
+                    html = cached_results[i]
+                elif i in batch_results:
+                    html = batch_results[i]
                     formula_count += 1
-                    if from_cache:
-                        cache_count += 1
-                    
-                    new_soup = BeautifulSoup(rendered_html, 'html.parser')
+                
+                if html:
+                    new_soup = BeautifulSoup(html, 'html.parser')
                     el.clear()
                     el.append(new_soup)
 
+            page_duration = time.time() - start_time
+            self.total_formulas += formula_count
+            self.total_cached += cache_count
+            self.total_time += page_duration
+
             if self.config['verbose']:
-                duration = (time.time() - start_time) * 1000
-                log.info(f"Katex-SSR processed {page.file.src_path} in {duration:.2f}ms: {formula_count} formulas ({cache_count} cached)")
+                duration_ms = page_duration * 1000
+                log.info(f"Katex-SSR processed {page.file.src_path} in {duration_ms:.2f}ms: {formula_count} formulas ({cache_count} cached)")
 
         # Assets Injection
         css_file = self.config['katex_css_filename']
@@ -378,6 +452,9 @@ class KatexSsrPlugin(BasePlugin):
         return str(soup)
 
     def on_post_build(self, config):
+        if not self.config['disable']:
+            log.info(f"Katex-SSR: 构建完毕。共处理 {self.total_formulas} 个数学公式 ({self.total_cached} 个来自缓存)，总耗时 {self.total_time:.2f} 秒。")
+
         if self.process:
             self.process.terminate()
             self.process.wait()

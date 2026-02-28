@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- **Node.js**: Must be installed and available in your system PATH.
+- **Bun** or **Node.js**: Must be installed and available in your system PATH (`bun` is recommended for optimal speed).
 - **Python**: 3.8+
 
 ## Install Plugin

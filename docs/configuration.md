@@ -16,6 +16,7 @@ plugins:
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
+| `use_bun` | bool/str | `'auto'` | Instructs the plugin to use the `bun` runtime for speed enhancements. Can be `true`, `false`, or `'auto'`. |
 | `verbose` | bool | `false` | If true, logs the number of formulas, cache hits, and time spent processing each page. |
 | `katex_dist` | str | jsDelivr | Base URL for CDN, or local file path to KaTeX distribution. Default: `https://cdn.jsdelivr.net/npm/katex@latest/dist/` |
 | `add_katex_css` | bool | `true` | Whether to automatically inject the CSS link tag into the page head. |
@@ -87,6 +88,7 @@ plugins:
 
 > [!IMPORTANT]
 > When `disable: true`, the plugin will:
+>
 > 1. Skip SSR processing during build (faster build time).
 > 2. Inject `katex.min.js` and `auto-render.min.js`.
 > 3. Inject an initialization script to render math as soon as the page loads.

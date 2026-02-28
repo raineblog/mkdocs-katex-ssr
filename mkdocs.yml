@@ -24,6 +24,7 @@ markdown_extensions:
 
 plugins:
   - katex-ssr:
+      use_bun: false
       verbose: true
       embed_assets: true
       katex_css_filename: "katex-swap.min.css"

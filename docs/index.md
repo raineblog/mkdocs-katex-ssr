@@ -19,6 +19,9 @@ Traditional client-side rendering relies on JavaScript in the browser to convert
 
 ## Features
 
+- **🚀 Ultra High Performance**: Employs an advanced batch-IPC processing architecture for mathematical formulas, deeply decoupling Python and JavaScript serialization and lowering rendering overhead by up to $O(1)$ IPC calls per page.
+- **⚡ Native Bun Support**: Automatically detects and leverages the revolutionary `Bun` runtime for faster startup and plugin execution. Seamlessly falls back to `Node.js` when Bun is unavailable.
+- **📦 Smart Dependency Management**: Auto-installs KaTeX dependencies via `npm` or `bun add` during the first run if they are missing locally.
 - **Flexible Rendering**: Supports both high-performance Server-Side Rendering (SSR) and traditional client-side rendering (via the `disable` option).
 - **Performance Monitoring**: Detailed build-time logging for each page tracking formula counts, cache hits, and processing speeds.
 - **Built-in Cache**: Includes a SQLite-based cache to speed up recompilation of equations.
