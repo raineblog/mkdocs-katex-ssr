@@ -8,7 +8,7 @@
 <link href="https://raineblog.dpdns.org/mkdocs-katex-ssr/" rel="canonical"/>
 <link href="getting-started/" rel="next"/>
 <link href="assets/images/favicon.png" rel="icon"/>
-<meta content="mkdocs-1.6.1, mkdocs-material-9.7.1" name="generator"/>
+<meta content="mkdocs-1.6.1, mkdocs-material-9.7.3" name="generator"/>
 <title>MkDocs KaTeX SSR</title>
 <link href="assets/stylesheets/main.484c7ddc.min.css" rel="stylesheet"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
@@ -245,6 +245,9 @@
 <p><strong>MkDocs KaTeX SSR</strong> pre-renders all math during the <code>mkdocs build</code> process using a local Node.js process. The resulting HTML contains ready-to-view markup.</p>
 <h2 id="features">Features</h2>
 <ul>
+<li><strong>🚀 Ultra High Performance</strong>: Employs an advanced batch-IPC processing architecture for mathematical formulas, deeply decoupling Python and JavaScript serialization and lowering rendering overhead by up to <span class="arithmatex"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(1)</annotation></semantics></math></span><span aria-hidden="true" class="katex-html"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord">1</span><span class="mclose">)</span></span></span></span></span> IPC calls per page.</li>
+<li><strong>⚡ Native Bun Support</strong>: Automatically detects and leverages the revolutionary <code>Bun</code> runtime for faster startup and plugin execution. Seamlessly falls back to <code>Node.js</code> when Bun is unavailable.</li>
+<li><strong>📦 Smart Dependency Management</strong>: Auto-installs KaTeX dependencies via <code>npm</code> or <code>bun add</code> during the first run if they are missing locally.</li>
 <li><strong>Flexible Rendering</strong>: Supports both high-performance Server-Side Rendering (SSR) and traditional client-side rendering (via the <code>disable</code> option).</li>
 <li><strong>Performance Monitoring</strong>: Detailed build-time logging for each page tracking formula counts, cache hits, and processing speeds.</li>
 <li><strong>Built-in Cache</strong>: Includes a SQLite-based cache to speed up recompilation of equations.</li>

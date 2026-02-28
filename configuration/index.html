@@ -9,7 +9,7 @@
 <link href="../getting-started/" rel="prev"/>
 <link href="../troubleshooting/" rel="next"/>
 <link href="../assets/images/favicon.png" rel="icon"/>
-<meta content="mkdocs-1.6.1, mkdocs-material-9.7.1" name="generator"/>
+<meta content="mkdocs-1.6.1, mkdocs-material-9.7.3" name="generator"/>
 <title>Configuration - MkDocs KaTeX SSR</title>
 <link href="../assets/stylesheets/main.484c7ddc.min.css" rel="stylesheet"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
@@ -331,6 +331,12 @@ plugins:
 </thead>
 <tbody>
 <tr>
+<td style="text-align: left;"><code>use_bun</code></td>
+<td style="text-align: left;">bool/str</td>
+<td style="text-align: left;"><code>'auto'</code></td>
+<td style="text-align: left;">Instructs the plugin to use the <code>bun</code> runtime for speed enhancements. Can be <code>true</code>, <code>false</code>, or <code>'auto'</code>.</td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>verbose</code></td>
 <td style="text-align: left;">bool</td>
 <td style="text-align: left;"><code>false</code></td>
@@ -412,12 +418,14 @@ plugins:
 </code></pre>
 <blockquote>
 <p>[!IMPORTANT]
-When <code>disable: true</code>, the plugin will:
-1. Skip SSR processing during build (faster build time).
-2. Inject <code>katex.min.js</code> and <code>auto-render.min.js</code>.
-3. Inject an initialization script to render math as soon as the page loads.
-4. Automatically pass <code>macros</code> from <code>katex_options</code> to the auto-render call.
-5. Still respect <code>ssr_contribs</code> and <code>client_scripts</code> (injecting them into the page).</p>
+When <code>disable: true</code>, the plugin will:</p>
+<ol>
+<li>Skip SSR processing during build (faster build time).</li>
+<li>Inject <code>katex.min.js</code> and <code>auto-render.min.js</code>.</li>
+<li>Inject an initialization script to render math as soon as the page loads.</li>
+<li>Automatically pass <code>macros</code> from <code>katex_options</code> to the auto-render call.</li>
+<li>Still respect <code>ssr_contribs</code> and <code>client_scripts</code> (injecting them into the page).</li>
+</ol>
 <p><strong>Note</strong>: <code>add_katex_css</code> must be set to <code>true</code> (default) when <code>disable</code> is <code>true</code>.</p>
 </blockquote>
 </article>
