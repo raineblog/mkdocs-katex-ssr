@@ -12,6 +12,7 @@ from mkdocs.plugins import BasePlugin
 from mkdocs.config import config_options
 from mkdocs.utils import get_relative_url
 from bs4 import BeautifulSoup
+import re
 
 # Extremely aggressive global warning suppression
 warnings.filterwarnings("ignore")
@@ -212,9 +213,19 @@ class KatexSsrPlugin(BasePlugin):
         CHUNK_SIZE = 500
         all_results = {}
         
+        # 移除 \x00-\x1f 控制字符，保留 \t, \n, \r
+        # 这是为了防止用户 Markdown 包含破坏 json 解析的脏数据
+        control_chars_re = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
+        
         with self.lock:
             for i in range(0, len(items), CHUNK_SIZE):
                 chunk = items[i:i + CHUNK_SIZE]
+                
+                # 清洗 chunk 内部的 latex
+                for item in chunk:
+                    if 'latex' in item:
+                        item['latex'] = control_chars_re.sub('', item['latex'])
+                
                 payload = {
                     'type': 'render_batch',
                     'items': chunk,
@@ -230,7 +241,7 @@ class KatexSsrPlugin(BasePlugin):
                         log.error("Katex-SSR: 渲染进程意外关闭。")
                         break
                     
-                    result = json.loads(response_line.decode('utf-8'))
+                    result = json.loads(response_line.decode('utf-8', errors='replace'), strict=False)
                     if result.get('status') == 'success':
                         for res in result.get('results', []):
                             if res.get('status') == 'success':

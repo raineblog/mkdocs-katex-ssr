@@ -46,6 +46,7 @@ rl.on('line', (line) => {
                 displayMode: displayMode || false,
                 throwOnError: false,
                 strict: false,
+                trust: true,
                 ...options
             });
             
@@ -58,6 +59,7 @@ rl.on('line', (line) => {
                         displayMode: item.displayMode || false,
                         throwOnError: false,
                         strict: false,
+                        trust: true,
                         ...options
                     });
                     return { id: item.id, status: 'success', html: html };
