@@ -48,7 +48,7 @@ jobs:
           key: ${{ runner.os }}-mkdocs
 
       - name: Build MkDocs
-        run: mkdocs build
+        run: uv run mkdocs build
 
       - name: Push to gh-pages Branch
         uses: peaceiris/actions-gh-pages@v4
