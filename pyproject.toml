@@ -1,20 +1,17 @@
-[build-system]
-requires = ["setuptools>=42", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "mkdocs-katex-ssr"
-version = "1.0.11"
+version = "1.1.0"
 description = "A MkDocs plugin for server-side rendering of KaTeX math."
 readme = "README.md"
 authors = [
-    {name = "RainPPR", email = "2125773894@qq.com"}
+    { name = "RainPPR", email = "PPR2125773894@163.com" }
 ]
-license = "MIT"
-license-files = ["LICEN[CS]E*"]
+license = {text = "MIT"}
+requires-python = ">=3.14"
 dependencies = [
-    "mkdocs>=1.1.0",
-    "beautifulsoup4>=4.9.0",
+    "mkdocs==1.6.1",
+    "beautifulsoup4>=4.14.3",
+    "lmdb>=1.7.5",
 ]
 
 [project.urls]
@@ -26,8 +23,18 @@ Issues = "https://github.com/raineblog/mkdocs-katex-ssr/issues"
 [project.entry-points."mkdocs.plugins"]
 katex-ssr = "mkdocs_katex_ssr.plugin:KatexSsrPlugin"
 
-[tool.setuptools]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
 packages = ["mkdocs_katex_ssr"]
 
-[tool.setuptools.package-data]
-mkdocs_katex_ssr = ["renderer.js"]
+[tool.hatch.build.targets.sdist]
+include = ["mkdocs_katex_ssr", "README.md", "LICENSE*"]
+
+[dependency-groups]
+dev = [
+    "mkdocs-material>=9.7.3",
+    "pymdown-extensions>=10.21",
+]

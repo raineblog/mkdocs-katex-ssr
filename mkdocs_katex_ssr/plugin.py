@@ -1,6 +1,5 @@
 import os
 import json
-import sqlite3
 import hashlib
 import subprocess
 import threading
@@ -8,6 +7,7 @@ import warnings
 import logging
 import shutil
 import time
+import lmdb
 from mkdocs.plugins import BasePlugin
 from mkdocs.config import config_options
 from mkdocs.utils import get_relative_url
@@ -34,6 +34,68 @@ logging.captureWarnings(True)
 
 log = logging.getLogger('mkdocs.plugins.katex-ssr')
 
+class LmdbCache:
+    def __init__(self, cache_dir):
+        self.cache_dir = cache_dir
+        self.map_size = 4 * 1024 * 1024  # Start with 16MB for CI friendliness
+        self._open_env()
+
+    def _open_env(self):
+        # metasync=False, sync=False for maximal performance as requested
+        self.env = lmdb.open(
+            self.cache_dir,
+            map_size=self.map_size,
+            writemap=True,
+            map_async=True,
+            metasync=False,
+            sync=False,
+            max_dbs=1
+        )
+
+    def get(self, key):
+        with self.env.begin() as txn:
+            value = txn.get(key.encode('utf-8'))
+            return value.decode('utf-8') if value else None
+
+    def set(self, key, value):
+        try:
+            with self.env.begin(write=True) as txn:
+                txn.put(key.encode('utf-8'), value.encode('utf-8'))
+        except lmdb.MapFullError:
+            # Dynamically double the map_size if full
+            self.map_size *= 2
+            log.info(f"Katex-SSR: Cache full, increasing map_size to {self.map_size / 1024 / 1024:.0f}MB")
+            self.env.close()
+            self._open_env()
+            self.set(key, value)
+
+    def close(self):
+        if self.env:
+            self.env.close()
+
+    @staticmethod
+    def migrate_from_sqlite(sqlite_path, lmdb_cache):
+        if not os.path.exists(sqlite_path):
+            return
+        
+        try:
+            import sqlite3
+            conn = sqlite3.connect(sqlite_path)
+            cursor = conn.execute("SELECT hash, html FROM katex_cache")
+            rows = cursor.fetchall()
+            
+            if rows:
+                log.info(f"Katex-SSR: Migrating {len(rows)} items from SQLite3 to LMDB...")
+                with lmdb_cache.env.begin(write=True) as txn:
+                    for key, value in rows:
+                        txn.put(key.encode('utf-8'), value.encode('utf-8'))
+            
+            conn.close()
+            os.remove(sqlite_path)
+            log.info("Katex-SSR: Migration completed and old cache removed.")
+        except Exception as e:
+            log.error(f"Katex-SSR: Migration failed: {e}")
+
 class KatexSsrPlugin(BasePlugin):
     config_scheme = (
         ('verbose', config_options.Type(bool, default=False)),
@@ -56,8 +118,7 @@ class KatexSsrPlugin(BasePlugin):
         self.lock = threading.Lock()
         self._asset_cache = {}
         self._local_dist_path = None
-        self.db_conn = None
-        self.db_path = None
+        self.cache = None
         self.total_formulas = 0
         self.total_cached = 0
         self.total_time = 0
@@ -84,20 +145,18 @@ class KatexSsrPlugin(BasePlugin):
         
         project_dir = os.path.dirname(config['config_file_path'])
         
-        # Initialize Cache DB
+        # Initialize Cache
         try:
             cache_dir = os.path.join(project_dir, '.cache', 'plugin', 'katex-ssr')
             os.makedirs(cache_dir, exist_ok=True)
-            self.db_path = os.path.join(cache_dir, 'cache.db')
-            self.db_conn = sqlite3.connect(
-                self.db_path, 
-                check_same_thread=False
-            )
-            with self.db_conn:
-                self.db_conn.execute('CREATE TABLE IF NOT EXISTS katex_cache (hash TEXT PRIMARY KEY, html TEXT)')
+            self.cache = LmdbCache(cache_dir)
+            
+            # Migration check
+            sqlite_path = os.path.join(cache_dir, 'cache.db')
+            LmdbCache.migrate_from_sqlite(sqlite_path, self.cache)
         except Exception as e:
-            print(f"Warning: Failed to initialize KaTeX SSR cache: {e}")
-            self.db_conn = None
+            log.error(f"Warning: Failed to initialize KaTeX SSR cache: {e}")
+            self.cache = None
         
         # Merge legacy contrib_scripts into ssr_contribs if used
         if self.config['contrib_scripts']:
@@ -179,10 +238,25 @@ class KatexSsrPlugin(BasePlugin):
                 cwd=project_dir,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
+                stderr=subprocess.PIPE,
                 shell=use_shell,
                 env=env
             )
+            
+            # Start stderr logging thread to avoid mixed output and pipe blockage
+            def log_stderr(pipe):
+                for line in iter(pipe.readline, b''):
+                    msg = line.decode('utf-8', errors='replace').strip()
+                    if msg:
+                        if 'error' in msg.lower():
+                            log.error(f"Katex-SSR Node Error: {msg}")
+                        else:
+                            log.debug(f"Katex-SSR Node: {msg}")
+                pipe.close()
+            
+            error_thread = threading.Thread(target=log_stderr, args=(self.process.stderr,), daemon=True)
+            error_thread.start()
+            
             log.info(f"Katex-SSR: 成功使用 {self.runtime} 启动后端渲染进程。")
             
             # Send ONLY ssr_contribs to Node
@@ -259,9 +333,6 @@ class KatexSsrPlugin(BasePlugin):
                     break
         return all_results
 
-        if self.config['verbose']:
-            duration = (time.time() - start_time) * 1000
-            log.info(f"Katex-SSR processed {page.file.src_path} in {duration:.2f}ms: {formula_count} formulas ({cache_count} cached)")
 
     def on_post_page(self, output, page, config):
         if self.config['disable']:
@@ -301,16 +372,14 @@ class KatexSsrPlugin(BasePlugin):
                 cache_key = None
                 from_cache = False
                 
-                if self.db_conn:
+                if self.cache:
                     try:
                         content_to_hash = f"{latex_trimmed}::{display_mode}"
                         cache_key = hashlib.sha256(content_to_hash.encode('utf-8')).hexdigest()
-                        cursor = self.db_conn.execute("SELECT html FROM katex_cache WHERE hash=?", (cache_key,))
-                        row = cursor.fetchone()
+                        row = self.cache.get(cache_key)
                         if row:
-                            cached_results[i] = row[0]
+                            cached_results[i] = row
                             from_cache = True
-                            formula_count += 1
                             cache_count += 1
                     except Exception as e:
                         pass
@@ -325,16 +394,12 @@ class KatexSsrPlugin(BasePlugin):
 
             batch_results = self._render_latex_batch(batch_items)
             
-            if self.db_conn and batch_results:
+            if self.cache and batch_results:
                 try:
-                    with self.db_conn:
-                        for item in batch_items:
-                            i = item['id']
-                            if i in batch_results and item['cache_key']:
-                                self.db_conn.execute(
-                                    "INSERT OR REPLACE INTO katex_cache (hash, html) VALUES (?, ?)",
-                                    (item['cache_key'], batch_results[i])
-                                )
+                    for item in batch_items:
+                        i = item['id']
+                        if i in batch_results and item['cache_key']:
+                            self.cache.set(item['cache_key'], batch_results[i])
                 except Exception as e:
                     log.warning(f"Error saving to cache: {e}")
             
@@ -344,7 +409,6 @@ class KatexSsrPlugin(BasePlugin):
                     html = cached_results[i]
                 elif i in batch_results:
                     html = batch_results[i]
-                    formula_count += 1
                 
                 if html:
                     new_soup = BeautifulSoup(html, 'html.parser')
@@ -352,13 +416,13 @@ class KatexSsrPlugin(BasePlugin):
                     el.append(new_soup)
 
             page_duration = time.time() - start_time
-            self.total_formulas += formula_count
+            self.total_formulas += len(math_elements)
             self.total_cached += cache_count
             self.total_time += page_duration
 
             if self.config['verbose']:
                 duration_ms = page_duration * 1000
-                log.info(f"Katex-SSR processed {page.file.src_path} in {duration_ms:.2f}ms: {formula_count} formulas ({cache_count} cached)")
+                log.info(f"Katex-SSR processed {page.file.src_path} in {duration_ms:.2f}ms: {len(math_elements)} formulas ({cache_count} cached)")
 
         # Assets Injection
         css_file = self.config['katex_css_filename']
@@ -492,12 +556,12 @@ class KatexSsrPlugin(BasePlugin):
                 self.process.kill()
                 self.process.wait()
         
-        if self.db_conn:
+        if self.cache:
             try:
-                self.db_conn.close()
+                self.cache.close()
             except:
                 pass
-            self.db_conn = None
+            self.cache = None
         
         # Copy assets if requested
         if self.config['embed_assets'] and self._local_dist_path:
