@@ -6,43 +6,8 @@ on:
       - 'v*'
 
 jobs:
-  update-version:
-    name: Update version in pyproject.toml
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    outputs:
-      version: ${{ steps.get_version.outputs.version }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Get version from tag
-        id: get_version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version $VERSION"
-
-      - name: Update pyproject.toml
-        run: |
-          VERSION=${{ steps.get_version.outputs.version }}
-          # 使用 sed 修改 version 字段
-          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
-          
-      - name: Commit and Push changes
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add pyproject.toml
-          git commit -m "chore: bump version to ${{ steps.get_version.outputs.version }} [skip ci]" || echo "No changes to commit"
-          git push origin main
-
   build-and-publish:
     name: Build and Publish 📦
-    needs: update-version
     runs-on: ubuntu-latest
     environment:
       name: pypi
