@@ -12,6 +12,7 @@ dependencies = [
     "mkdocs==1.6.1",
     "beautifulsoup4>=4.14.3",
     "lmdb>=1.7.5",
+    "cffi>=2.0.0",
 ]
 
 [project.urls]
