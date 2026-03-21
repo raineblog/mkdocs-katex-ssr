@@ -37,7 +37,7 @@ log = logging.getLogger('mkdocs.plugins.katex-ssr')
 class LmdbCache:
     def __init__(self, cache_dir):
         self.cache_dir = cache_dir
-        self.map_size = 4 * 1024 * 1024  # Start with 16MB for CI friendliness
+        self.map_size = 32 * 1024 * 1024  # Start with 1GB (conservative for virtual memory)
         self._open_env()
 
     def _open_env(self):
@@ -86,9 +86,10 @@ class LmdbCache:
             
             if rows:
                 log.info(f"Katex-SSR: Migrating {len(rows)} items from SQLite3 to LMDB...")
-                with lmdb_cache.env.begin(write=True) as txn:
-                    for key, value in rows:
-                        txn.put(key.encode('utf-8'), value.encode('utf-8'))
+                for i, (key, value) in enumerate(rows):
+                    lmdb_cache.set(key, value)
+                    if (i + 1) % 1000 == 0:
+                        log.info(f"Katex-SSR: Migrated {i + 1}/{len(rows)} items...")
             
             conn.close()
             os.remove(sqlite_path)
