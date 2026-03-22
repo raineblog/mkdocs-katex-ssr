@@ -152,13 +152,32 @@ class KatexSsrPlugin(BasePlugin):
 
         self.config['katex_dist'] = self._ensure_trailing_slash(self.config['katex_dist'])
         
-        project_dir = os.path.dirname(config['config_file_path'])
+        project_dir = os.path.abspath(os.path.dirname(config['config_file_path']))
         
         # Initialize Cache
+        plugin_version = "1.2.0" # Should match pyproject.toml
+        self.plugin_version = plugin_version
+        
         try:
             cache_dir = os.path.join(project_dir, '.cache', 'plugin', 'katex-ssr')
             os.makedirs(cache_dir, exist_ok=True)
             self.cache = LmdbCache(cache_dir)
+            
+            # 校验缓存版本
+            cached_ver = self.cache.get("__plugin_version__")
+            if cached_ver != plugin_version:
+                if cached_ver is not None:
+                    log.info(f"Katex-SSR: 插件版本由 {cached_ver} 变更为 {plugin_version}，正在清理并重置缓存...")
+                else:
+                    log.info(f"Katex-SSR: 缓存中未找到版本标识，正在初始化版本 {plugin_version}...")
+                
+                # 关闭并物理清理缓存目录
+                self.cache.close()
+                shutil.rmtree(cache_dir)
+                os.makedirs(cache_dir, exist_ok=True)
+                self.cache = LmdbCache(cache_dir)
+                self.cache.set("__plugin_version__", plugin_version)
+                
         except Exception as e:
             log.error(f"Failed to initialize KaTeX SSR cache: {e}")
             self.cache = None
@@ -227,7 +246,8 @@ class KatexSsrPlugin(BasePlugin):
         use_shell = os.name == 'nt'
         cmd = [self.runtime, renderer_path]
         if use_shell:
-             cmd = f'{self.runtime} "{renderer_path}"'
+             # 在 Windows 下，如果 runtime 路径包含空格，需要用引号包裹
+             cmd = f'"{self.runtime}" "{renderer_path}"'
         
         try:
             env = os.environ.copy()
@@ -244,7 +264,8 @@ class KatexSsrPlugin(BasePlugin):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 shell=use_shell,
-                env=env
+                env=env,
+                universal_newlines=False # Ensure binary mode for pipes
             )
             
             # Start stderr logging thread to avoid mixed output and pipe blockage
@@ -440,7 +461,6 @@ class KatexSsrPlugin(BasePlugin):
                 return output
 
             start_time = time.time()
-            formula_count = 0
             cache_count = 0
 
             soup = BeautifulSoup(output, 'html.parser')
@@ -453,33 +473,44 @@ class KatexSsrPlugin(BasePlugin):
                 content = el.get_text(strip=True)
                 display_mode = False
                 
-                if content.startswith('\\(') and content.endswith('\\)'):
-                    latex = content[2:-2]
-                elif content.startswith('\\[') and content.endswith('\\]'):
+                # 1. 优先匹配长分隔符，防止 $$ 被 $ 错误捕获
+                if content.startswith('$$') and content.endswith('$$'):
                     latex = content[2:-2]
                     display_mode = True
                 elif content.startswith('$') and content.endswith('$'):
                     latex = content[1:-1]
-                elif content.startswith('$$') and content.endswith('$$'):
+                elif content.startswith('\\(') and content.endswith('\\)'):
+                    latex = content[2:-2]
+                elif content.startswith('\\[') and content.endswith('\\]'):
                     latex = content[2:-2]
                     display_mode = True
                 else:
                     latex = content
                 
                 latex_trimmed = latex.strip()
+                
+                # 检测全局宏定义并给出警告
+                # Macros defined by \gdef, \xdef, \global\def, \global\edef, \global\let, and \global\futurelet
+                if re.search(r'\\(gdef|xdef|global\s*\\(def|edef|let|futurelet))', latex_trimmed):
+                    log.warning(f"Katex-SSR: 在公式中检测到全局宏定义（如 \\gdef），这可能会导致缓存结果不一致。建议在 mkdocs.yml 的 katex_options.macros 中定义宏。公式内容: {latex_trimmed[:50]}...")
+
                 cache_key = None
                 from_cache = False
                 
                 if self.cache:
                     try:
-                        content_to_hash = f"{latex_trimmed}::{display_mode}"
+                        # 增强型缓存键：包含选项指纹、插件版本以及 Contribs 状态
+                        opts_json = json.dumps(self.config.get('katex_options', {}), sort_keys=True, separators=(',', ':'))
+                        contribs_str = ",".join(sorted([c for c in self.config.get('ssr_contribs', []) if '://' not in c]))
+                        
+                        content_to_hash = f"{latex_trimmed}::{display_mode}::{opts_json}::{contribs_str}::{self.plugin_version}"
                         cache_key = hashlib.sha256(content_to_hash.encode('utf-8')).hexdigest()
                         row = self.cache.get(cache_key)
                         if row:
                             cached_results[i] = row
                             from_cache = True
                             cache_count += 1
-                    except Exception as e:
+                    except Exception:
                         pass
                 
                 if not from_cache:
@@ -541,7 +572,7 @@ class KatexSsrPlugin(BasePlugin):
                 # 显式关闭标准输入，发送 EOF 信号给 Node/Bun 进程
                 if self.process.stdin:
                     self.process.stdin.close()
-            except:
+            except Exception:
                 pass
             
             try:
@@ -557,7 +588,7 @@ class KatexSsrPlugin(BasePlugin):
         if self.cache:
             try:
                 self.cache.close()
-            except:
+            except Exception:
                 pass
             self.cache = None
         

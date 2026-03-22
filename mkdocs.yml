@@ -17,6 +17,7 @@ nav:
   - Configuration: configuration.md
   - Troubleshooting: troubleshooting.md
   - Demo: demo.md
+  - Cache Test: demo_cache.md
 
 markdown_extensions:
   - pymdownx.arithmatex:
