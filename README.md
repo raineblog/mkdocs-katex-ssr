@@ -14,7 +14,7 @@ Traditional client-side rendering relies on JavaScript in the browser to convert
 - **🚀 Ultra High Performance**: Employs an advanced batch-IPC processing architecture for mathematical formulas, deeply decoupling Python and JavaScript serialization and lowering rendering overhead by up to $O(1)$ IPC calls per page.
 - **⚡ Native Bun Support**: Automatically detects and leverages the revolutionary `Bun` runtime for faster startup and plugin execution. Seamlessly falls back to `Node.js` when Bun is unavailable.
 - **📦 Smart Dependency Management**: Auto-installs KaTeX dependencies via `npm` or `bun add` during the first run if they are missing locally.
-- **🗃️ Built-in LMDB Cache**: Recompilation is instantaneous thanks to the integrated ultra-fast LMDB engine (4GB limit by default).
+- **🗃️ Built-in LMDB Cache**: Recompilation is instantaneous thanks to the integrated ultra-fast LMDB engine (dynamic map size, starts at 32MB).
 - **🔌 Offline Mode (Self-Contained)**: Safely enables the "Offline Mode" which pulls CSS, fonts, and scripts directly to your local site bundle.
 - **🔄 Client-Side Fallback**: Introduces a flexible `disable` option to revert to traditional client-side rendering while preserving asset management benefits.
 

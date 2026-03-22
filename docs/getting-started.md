@@ -18,7 +18,6 @@ Alternatively, if you are installing from source:
 ```bash
 git clone https://github.com/raineblog/mkdocs-katex-ssr.git
 cd mkdocs-katex-ssr
-```bash
 pip install .
 ```
 

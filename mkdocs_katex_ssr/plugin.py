@@ -35,67 +35,76 @@ logging.captureWarnings(True)
 log = logging.getLogger('mkdocs.plugins.katex-ssr')
 
 class LmdbCache:
-    def __init__(self, cache_dir):
+    """LMDB 缓存管理器，用于高性能的公式渲染结果缓存"""
+    
+    def __init__(self, cache_dir, initial_map_size=32 * 1024 * 1024):
+        """初始化 LMDB 缓存
+        
+        Args:
+            cache_dir: 缓存目录路径
+            initial_map_size: 初始映射大小（默认 32MB，使用虚拟内存，不会立即占用物理内存）
+        """
         self.cache_dir = cache_dir
-        self.map_size = 32 * 1024 * 1024  # Start with 1GB (conservative for virtual memory)
-        self._open_env()
+        self.map_size = initial_map_size
+        self.env = self._open_env()
 
     def _open_env(self):
-        # metasync=False, sync=False for maximal performance as requested
-        self.env = lmdb.open(
+        """打开 LMDB 环境，使用性能优化配置"""
+        return lmdb.open(
             self.cache_dir,
             map_size=self.map_size,
-            writemap=True,
-            map_async=True,
-            metasync=False,
-            sync=False,
+            writemap=True,      # 直接写入映射，提高性能
+            map_async=True,     # 异步映射，提高性能
+            metasync=False,     # 不同步元数据，提高性能
+            sync=False,         # 不同步数据，提高性能
             max_dbs=1
         )
 
     def get(self, key):
+        """获取缓存值
+        
+        Args:
+            key: 缓存键
+            
+        Returns:
+            缓存的值，如果不存在则返回 None
+        """
         with self.env.begin() as txn:
             value = txn.get(key.encode('utf-8'))
             return value.decode('utf-8') if value else None
 
     def set(self, key, value):
+        """设置缓存值
+        
+        Args:
+            key: 缓存键
+            value: 缓存值
+        """
         try:
             with self.env.begin(write=True) as txn:
                 txn.put(key.encode('utf-8'), value.encode('utf-8'))
         except lmdb.MapFullError:
-            # Dynamically double the map_size if full
+            # 动态扩展映射大小，防止缓存空间不足导致构建失败
             self.map_size *= 2
             log.info(f"Katex-SSR: Cache full, increasing map_size to {self.map_size / 1024 / 1024:.0f}MB")
             self.env.close()
-            self._open_env()
+            self.env = self._open_env()
             self.set(key, value)
 
     def close(self):
+        """关闭 LMDB 环境"""
         if self.env:
             self.env.close()
+            self.env = None
 
-    @staticmethod
-    def migrate_from_sqlite(sqlite_path, lmdb_cache):
-        if not os.path.exists(sqlite_path):
-            return
-        
-        try:
-            import sqlite3
-            conn = sqlite3.connect(sqlite_path)
-            cursor = conn.execute("SELECT hash, html FROM katex_cache")
-            rows = cursor.fetchall()
-            
-            if rows:
-                log.info(f"Katex-SSR: Migrating {len(rows)} items from SQLite3 to LMDB...")
-                for i, (key, value) in enumerate(rows):
-                    lmdb_cache.set(key, value)
-                    if (i + 1) % 1000 == 0:
-                        log.info(f"Katex-SSR: Migrated {i + 1}/{len(rows)} items...")
-            
-            conn.close()
-            os.remove(sqlite_path)
-            log.info("Katex-SSR: Migration completed and old cache removed.")
-        except Exception as e:
-            log.error(f"Katex-SSR: Migration failed: {e}")
+    def __enter__(self):
+        """上下文管理器入口"""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """上下文管理器出口"""
+        self.close()
+
 
 class KatexSsrPlugin(BasePlugin):
     config_scheme = (
@@ -125,16 +134,15 @@ class KatexSsrPlugin(BasePlugin):
         self.total_time = 0
 
     def _ensure_trailing_slash(self, path):
-        if not path.endswith('/') and not path.endswith('\\'):
-            return path + '/'
-        return path
+        """确保路径以斜杠结尾"""
+        return path if path.endswith(('/', '\\')) else f"{path}/"
 
     def _resolve_url(self, base, path):
+        """解析 URL 或文件路径"""
         base = base.replace('\\', '/')
         if base.startswith('http'):
-            return base.rstrip('/') + '/' + path.lstrip('/')
-        else:
-            return os.path.normpath(os.path.join(base, path))
+            return f"{base.rstrip('/')}/{path.lstrip('/')}"
+        return os.path.normpath(os.path.join(base, path))
 
     def on_config(self, config):
         if self.config['disable'] and not self.config['add_katex_css']:
@@ -151,20 +159,15 @@ class KatexSsrPlugin(BasePlugin):
             cache_dir = os.path.join(project_dir, '.cache', 'plugin', 'katex-ssr')
             os.makedirs(cache_dir, exist_ok=True)
             self.cache = LmdbCache(cache_dir)
-            
-            # Migration check
-            sqlite_path = os.path.join(cache_dir, 'cache.db')
-            LmdbCache.migrate_from_sqlite(sqlite_path, self.cache)
         except Exception as e:
-            log.error(f"Warning: Failed to initialize KaTeX SSR cache: {e}")
+            log.error(f"Failed to initialize KaTeX SSR cache: {e}")
             self.cache = None
         
-        # Merge legacy contrib_scripts into ssr_contribs if used
+        # 合并遗留的 contrib_scripts 到 ssr_contribs
         if self.config['contrib_scripts']:
-            # Append unique items
-            for script in self.config['contrib_scripts']:
-                if script not in self.config['ssr_contribs']:
-                    self.config['ssr_contribs'].append(script)
+            self.config['ssr_contribs'] = list(set(
+                self.config['ssr_contribs'] + self.config['contrib_scripts']
+            ))
 
         # Detect runtime environment (Node vs Bun)
         self.runtime = 'node'
@@ -271,10 +274,10 @@ class KatexSsrPlugin(BasePlugin):
                 self.process.stdin.write(line)
                 self.process.stdin.flush()
             except Exception as e:
-                print(f"Error during KaTeX setup: {e}")
+                log.error(f"KaTeX setup failed: {e}")
             
         except Exception as e:
-            print(f"Error starting KaTeX renderer: {e}")
+            log.error(f"Failed to start KaTeX renderer: {e}")
             self.process = None
         
         return config
@@ -334,6 +337,100 @@ class KatexSsrPlugin(BasePlugin):
                     break
         return all_results
 
+
+    def _inject_css(self, soup, page):
+        """注入 CSS 链接"""
+        css_file = self.config['katex_css_filename']
+        if not self.config['add_katex_css']:
+            return
+        
+        if self.config['embed_assets'] and self._local_dist_path:
+            dest_path = self.config['copy_assets_to']
+            css_dest_file = f"{dest_path}/{css_file}"
+            css_url = get_relative_url(css_dest_file, page.url)
+        else:
+            css_url = self._resolve_url(self.config['katex_dist'], css_file)
+        
+        css_link = soup.new_tag('link', rel='stylesheet', href=css_url)
+        if soup.head:
+            soup.head.append(css_link)
+        else:
+            soup.insert(0, css_link)
+
+    def _inject_scripts(self, soup, page, scripts):
+        """注入 JavaScript 脚本"""
+        for script_name in scripts:
+            if '://' in script_name or script_name.endswith('.js'):
+                script_url = script_name
+            elif self.config['embed_assets'] and self._local_dist_path:
+                dest_path = self.config['copy_assets_to']
+                script_dest_file = f"{dest_path}/contrib/{script_name}.min.js"
+                script_url = get_relative_url(script_dest_file, page.url)
+            else:
+                script_url = self._resolve_url(
+                    self.config['katex_dist'],
+                    f'contrib/{script_name}.min.js'
+                )
+            
+            script_tag = soup.new_tag('script', src=script_url)
+            if soup.body:
+                soup.body.append(script_tag)
+            else:
+                soup.append(script_tag)
+
+    def _inject_auto_render(self, soup, page):
+        """注入自动渲染脚本（仅在 disable 模式下使用）"""
+        # 1. Inject KaTeX JS
+        if self.config['embed_assets'] and self._local_dist_path:
+            dest_path = self.config['copy_assets_to']
+            js_url = get_relative_url(f"{dest_path}/katex.min.js", page.url)
+        else:
+            js_url = self._resolve_url(self.config['katex_dist'], "katex.min.js")
+        
+        katex_js = soup.new_tag('script', src=js_url)
+        if soup.body:
+            soup.body.append(katex_js)
+        else:
+            soup.append(katex_js)
+
+        # 2. Inject Auto-render JS
+        if self.config['embed_assets'] and self._local_dist_path:
+            dest_path = self.config['copy_assets_to']
+            auto_url = get_relative_url(f"{dest_path}/contrib/auto-render.min.js", page.url)
+        else:
+            auto_url = self._resolve_url(self.config['katex_dist'], "contrib/auto-render.min.js")
+        
+        auto_js = soup.new_tag('script', src=auto_url)
+        if soup.body:
+            soup.body.append(auto_js)
+        else:
+            soup.append(auto_js)
+
+        # 3. Inject ssr_contribs (they are needed on client if SSR is disabled)
+        self._inject_scripts(soup, page, self.config['ssr_contribs'])
+
+        # 4. Inject auto-render init code
+        macros = self.config['katex_options'].get('macros', {})
+        auto_render_script = f"""
+        document.addEventListener("DOMContentLoaded", function() {{
+            renderMathInElement(document.body, {{
+                delimiters: [
+                    {{left: "$$", right: "$$", display: true}},
+                    {{left: "$", right: "$", display: false}},
+                    {{left: "\\\\(", right: "\\\\)", display: false}},
+                    {{left: "\\\\[", right: "\\\\]", display: true}}
+                ],
+                macros: {json.dumps(macros)},
+                ...{json.dumps(self.config['katex_options'])}
+            }});
+        }});
+        """
+        init_tag = soup.new_tag('script')
+        init_tag.string = auto_render_script
+        if soup.body:
+            soup.body.append(init_tag)
+        else:
+            soup.append(init_tag)
 
     def on_post_page(self, output, page, config):
         if self.config['disable']:
@@ -426,112 +523,12 @@ class KatexSsrPlugin(BasePlugin):
                 log.info(f"Katex-SSR processed {page.file.src_path} in {duration_ms:.2f}ms: {len(math_elements)} formulas ({cache_count} cached)")
 
         # Assets Injection
-        css_file = self.config['katex_css_filename']
-        if self.config['add_katex_css']:
-            if self.config['embed_assets'] and self._local_dist_path:
-                dest_path = self.config['copy_assets_to']
-                css_dest_file = f"{dest_path}/{css_file}"
-                css_url = get_relative_url(css_dest_file, page.url)
-                css_link = soup.new_tag('link', rel='stylesheet', href=css_url)
-                if soup.head:
-                    soup.head.append(css_link)
-                else:
-                    soup.insert(0, css_link)
-            else:
-                css_url = self._resolve_url(self.config['katex_dist'], css_file)
-                css_link = soup.new_tag('link', rel='stylesheet', href=css_url)
-                if soup.head:
-                    soup.head.append(css_link)
-                else:
-                    soup.insert(0, css_link)
-
-        # Inject ONLY client_scripts
-        for script_name in self.config['client_scripts']:
-            if '://' in script_name or script_name.endswith('.js'):
-                script_url = script_name
-            else:
-                if self.config['embed_assets'] and self._local_dist_path:
-                     dest_path = self.config['copy_assets_to']
-                     script_dest_file = f"{dest_path}/contrib/{script_name}.min.js"
-                     script_url = get_relative_url(script_dest_file, page.url)
-                else:
-                    script_url = self._resolve_url(self.config['katex_dist'], f'contrib/{script_name}.min.js')
-            
-            script_tag = soup.new_tag('script', src=script_url)
-            if soup.body:
-                soup.body.append(script_tag)
-            else:
-                soup.append(script_tag)
+        self._inject_css(soup, page)
+        self._inject_scripts(soup, page, self.config['client_scripts'])
 
         # Inject Auto-render if disabled
         if self.config['disable']:
-            # 1. Inject KaTeX JS
-            if self.config['embed_assets'] and self._local_dist_path:
-                dest_path = self.config['copy_assets_to']
-                js_url = get_relative_url(f"{dest_path}/katex.min.js", page.url)
-            else:
-                js_url = self._resolve_url(self.config['katex_dist'], "katex.min.js")
-            
-            katex_js = soup.new_tag('script', src=js_url)
-            if soup.body:
-                soup.body.append(katex_js)
-            else:
-                soup.append(katex_js)
-
-            # 2. Inject Auto-render JS
-            if self.config['embed_assets'] and self._local_dist_path:
-                dest_path = self.config['copy_assets_to']
-                auto_url = get_relative_url(f"{dest_path}/contrib/auto-render.min.js", page.url)
-            else:
-                auto_url = self._resolve_url(self.config['katex_dist'], "contrib/auto-render.min.js")
-            
-            auto_js = soup.new_tag('script', src=auto_url)
-            if soup.body:
-                soup.body.append(auto_js)
-            else:
-                soup.append(auto_js)
-
-            # 3. Inject ssr_contribs (they are needed on client if SSR is disabled)
-            for script_name in self.config['ssr_contribs']:
-                if '://' in script_name or script_name.endswith('.js'):
-                    script_url = script_name
-                else:
-                    if self.config['embed_assets'] and self._local_dist_path:
-                        dest_path = self.config['copy_assets_to']
-                        script_dest_file = f"{dest_path}/contrib/{script_name}.min.js"
-                        script_url = get_relative_url(script_dest_file, page.url)
-                    else:
-                        script_url = self._resolve_url(self.config['katex_dist'], f'contrib/{script_name}.min.js')
-                
-                script_tag = soup.new_tag('script', src=script_url)
-                if soup.body:
-                    soup.body.append(script_tag)
-                else:
-                    soup.append(script_tag)
-
-            # 4. Inject auto-render init code
-            macros = self.config['katex_options'].get('macros', {})
-            # Standard delimiters for arithmatex generic mode
-            auto_render_script = f"""
-            document.addEventListener("DOMContentLoaded", function() {{
-                renderMathInElement(document.body, {{
-                    delimiters: [
-                        {{left: "$$", right: "$$", display: true}},
-                        {{left: "$", right: "$", display: false}},
-                        {{left: "\\\\(", right: "\\\\)", display: false}},
-                        {{left: "\\\\[", right: "\\\\]", display: true}}
-                    ],
-                    macros: {json.dumps(macros)},
-                    ...{json.dumps(self.config['katex_options'])}
-                }});
-            }});
-            """
-            init_tag = soup.new_tag('script')
-            init_tag.string = auto_render_script
-            if soup.body:
-                soup.body.append(init_tag)
-            else:
-                soup.append(init_tag)
+            self._inject_auto_render(soup, page)
 
         return str(soup)
 

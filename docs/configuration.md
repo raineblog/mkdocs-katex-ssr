@@ -10,10 +10,10 @@ markdown_extensions:
 plugins:
   - katex-ssr:
       # ... options ...
+```
 
 > [!TIP]
-> **LMDB Cache**: The plugin now uses LMDB for high-performance caching. By default, it allocates a 4GB virtual memory address space (`map_size`). This does not immediately consume 4GB of RAM/Disk, but ensures the cache can grow up to that limit.
-```
+> **LMDB Cache**: The plugin uses LMDB for high-performance caching. The cache starts at 32MB and dynamically expands as needed using virtual memory.
 
 ## Basic Options
 

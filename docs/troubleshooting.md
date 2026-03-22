@@ -50,3 +50,31 @@ plugins:
       disable: true
       add_katex_css: true # This must be true
 ```
+
+## LMDB Cache Issues
+
+### Cache Full Error
+
+**Error:**
+
+```text
+Katex-SSR: Cache full, increasing map_size to XXXMB
+```
+
+**Solution:**
+
+This is normal behavior. The plugin automatically expands the cache size when needed. The cache starts at 32MB and doubles in size as needed using virtual memory.
+
+### Cache Corruption
+
+**Error:**
+
+```text
+Failed to initialize KaTeX SSR cache: ...
+```
+
+**Solution:**
+
+1. Delete the `.cache/plugin/katex-ssr` directory in your project root.
+2. Rebuild your site: `mkdocs build`
+3. The cache will be recreated automatically.
