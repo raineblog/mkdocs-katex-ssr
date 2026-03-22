@@ -181,6 +181,37 @@
     </span>
 </a>
 </li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#lmdb-cache-issues">
+<span class="md-ellipsis">
+      
+        LMDB Cache Issues
+      
+    </span>
+</a>
+<nav aria-label="LMDB Cache Issues" class="md-nav">
+<ul class="md-nav__list">
+<li class="md-nav__item">
+<a class="md-nav__link" href="#cache-full-error">
+<span class="md-ellipsis">
+      
+        Cache Full Error
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#cache-corruption">
+<span class="md-ellipsis">
+      
+        Cache Corruption
+      
+    </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
 </ul>
 </nav>
 </li>
@@ -237,6 +268,37 @@
     </span>
 </a>
 </li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#lmdb-cache-issues">
+<span class="md-ellipsis">
+      
+        LMDB Cache Issues
+      
+    </span>
+</a>
+<nav aria-label="LMDB Cache Issues" class="md-nav">
+<ul class="md-nav__list">
+<li class="md-nav__item">
+<a class="md-nav__link" href="#cache-full-error">
+<span class="md-ellipsis">
+      
+        Cache Full Error
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#cache-corruption">
+<span class="md-ellipsis">
+      
+        Cache Corruption
+      
+    </span>
+</a>
+</li>
+</ul>
+</nav>
+</li>
 </ul>
 </nav>
 </div>
@@ -281,6 +343,23 @@ The plugin requires <code>node</code> to be in your system's PATH.</p>
       disable: true
       add_katex_css: true # This must be true
 </code></pre>
+<h2 id="lmdb-cache-issues">LMDB Cache Issues</h2>
+<h3 id="cache-full-error">Cache Full Error</h3>
+<p><strong>Error:</strong></p>
+<pre><code class="language-text">Katex-SSR: Cache full, increasing map_size to XXXMB
+</code></pre>
+<p><strong>Solution:</strong></p>
+<p>This is normal behavior. The plugin automatically expands the cache size when needed. The cache starts at 32MB and doubles in size as needed using virtual memory.</p>
+<h3 id="cache-corruption">Cache Corruption</h3>
+<p><strong>Error:</strong></p>
+<pre><code class="language-text">Failed to initialize KaTeX SSR cache: ...
+</code></pre>
+<p><strong>Solution:</strong></p>
+<ol>
+<li>Delete the <code>.cache/plugin/katex-ssr</code> directory in your project root.</li>
+<li>Rebuild your site: <code>mkdocs build</code></li>
+<li>The cache will be recreated automatically.</li>
+</ol>
 </article>
 </div>
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>

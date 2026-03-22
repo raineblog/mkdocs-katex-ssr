@@ -248,10 +248,9 @@
 <li><strong>🚀 Ultra High Performance</strong>: Employs an advanced batch-IPC processing architecture for mathematical formulas, deeply decoupling Python and JavaScript serialization and lowering rendering overhead by up to <span class="arithmatex"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(1)</annotation></semantics></math></span><span aria-hidden="true" class="katex-html"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord">1</span><span class="mclose">)</span></span></span></span></span> IPC calls per page.</li>
 <li><strong>⚡ Native Bun Support</strong>: Automatically detects and leverages the revolutionary <code>Bun</code> runtime for faster startup and plugin execution. Seamlessly falls back to <code>Node.js</code> when Bun is unavailable.</li>
 <li><strong>📦 Smart Dependency Management</strong>: Auto-installs KaTeX dependencies via <code>npm</code> or <code>bun add</code> during the first run if they are missing locally.</li>
-<li><strong>Flexible Rendering</strong>: Supports both high-performance Server-Side Rendering (SSR) and traditional client-side rendering (via the <code>disable</code> option).</li>
-<li><strong>Performance Monitoring</strong>: Detailed build-time logging for each page tracking formula counts, cache hits, and processing speeds.</li>
-<li><strong>Built-in Cache</strong>: Includes an ultra-fast LMDB-based cache to speed up recompilation of equations.</li>
-<li><strong>Clean Output</strong>: Aggressive warning suppression for a quieter build log.</li>
+<li><strong>🗃️ Built-in LMDB Cache</strong>: Recompilation is instantaneous thanks to the integrated ultra-fast LMDB engine (dynamic map size, starts at 32MB).</li>
+<li><strong>🔌 Offline Mode (Self-Contained)</strong>: Safely enables the "Offline Mode" which pulls CSS, fonts, and scripts directly to your local site bundle.</li>
+<li><strong>🔄 Client-Side Fallback</strong>: Introduces a flexible <code>disable</code> option to revert to traditional client-side rendering while preserving asset management benefits.</li>
 </ul>
 </article>
 </div>
