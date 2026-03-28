@@ -1,6 +1,6 @@
 [project]
 name = "mkdocs-katex-ssr"
-version = "1.2.1"
+version = "1.2.0"
 description = "A MkDocs plugin for server-side rendering of KaTeX math."
 readme = "README.md"
 authors = [
